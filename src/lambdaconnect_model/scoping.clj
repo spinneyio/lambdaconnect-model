@@ -519,11 +519,11 @@
             (apply concat (map referenced-tags-from-constraint (rest constraint)))
             :else []))))
 
-(defn- changable? [{:keys [permissions]}]
+(defn- changeable? [{:keys [permissions]}]
   (or (:modify permissions)
       (:create permissions)))
 
-(defn- referenced-by-changable-entity? [edn selected-tag]
+(defn- referenced-by-changeable-entity? [edn selected-tag]
   (let [tags-with-reference-to-selected (->> edn
                                              (map (fn [[tag description]]
                                                     [tag (referenced-tags-from-constraint description)]))
@@ -533,24 +533,24 @@
     (if (empty? tags-with-reference-to-selected)
       false
       (or
-       (some (fn [tag] (changable? (get edn tag))) tags-with-reference-to-selected)
-       (some identity (map (partial referenced-by-changable-entity? edn) tags-with-reference-to-selected))))))
+       (some (fn [tag] (changeable? (get edn tag))) tags-with-reference-to-selected)
+       (some identity (map (partial referenced-by-changeable-entity? edn) tags-with-reference-to-selected))))))
 
 (defn add-include-in-push-permission [edn]
   (let [all-constraints-tags (->> edn
                                   (mapcat (fn [[tag description]]
                                             (referenced-tags-from-constraint description)))
                                   (into #{}))
-        referenced-unchangable-tags (->> edn
+        referenced-unchangeable-tags (->> edn
                                          (filter (fn [[tag description]]
-                                                   (not (changable? description))))
+                                                   (not (changeable? description))))
                                          (filter (fn [[tag _]]
                                                    (contains? all-constraints-tags tag)))
                                          (filter (fn [[tag _]]
-                                                   (referenced-by-changable-entity? edn tag)))
+                                                   (referenced-by-changeable-entity? edn tag)))
                                          (map first))
         include-in-push (fn [edn tag] (assoc-in edn [tag :permissions :include-in-push] true))]
-    (reduce include-in-push edn referenced-unchangable-tags)))
+    (reduce include-in-push edn referenced-unchangeable-tags)))
 
 (defn read-pull-scoping-edn [path entities-by-name]
   (let [edn (clojure.edn/read-string (slurp path))]

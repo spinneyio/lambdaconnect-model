@@ -21,40 +21,37 @@
 (def memoized-inverses (memoize inverses-fun))
 
 (defn replace-inverses
-  ([obj entity] (replace-inverses obj entity false))
-  ([obj entity untangle-singles]
-   (let [names (keys obj)
-         inverses (memoized-inverses names entity)]
-     (into {} (map (fn [[key value]]
-                     (let [ik (get inverses key)]
-                       [(or ik key) (if (and untangle-singles
-                                             ik
-                                             (not (:to-many (get (name key) (:relationships entity)))))
-                                      (first value)
-                                      value)])) obj)))))
+  [obj entity untangle-singles]
+  (let [names (keys obj)
+        inverses (memoized-inverses names entity)]
+    (into {} (map (fn [[key value]]
+                    (let [ik (get inverses key)]
+                      [(or ik key) (if (and untangle-singles
+                                            ik
+                                            (not (:to-many (get (name key) (:relationships entity)))))
+                                     (first value)
+                                     value)])) obj))))
 
 (defn clojure-to-json
-  ([obj entity] (clojure-to-json obj entity t/inverse-parser-for-attribute t/inverse-parser-for-relationship))
-
-  ([obj entity inverse-parser-for-attribute inverse-parser-for-relationship]
-   (let [entity-fields (merge (:attributes entity) (:relationships entity))]
-     (->> entity-fields
-          (map (fn [[name attr-or-rel]]
-                 (let [fake? (t/fake-attribs name)
-                       k (if fake? (keyword name) (t/datomic-name attr-or-rel))
-                       pre-v (k obj)
-                       val (if (nil? pre-v)
-                             (if (:to-many attr-or-rel) [] nil)
-                             pre-v)
-                       inverse-parser (cond
-                                        (nil? pre-v)
-                                        identity
-                                        (:destination-entity attr-or-rel) ;; this is relationship                           
-                                        (inverse-parser-for-relationship attr-or-rel)
-                                        :else
-                                        (inverse-parser-for-attribute attr-or-rel))]
-                   (if (and fake? (nil? pre-v))
-                     nil
-                     [(clojure.string/replace name  #"-" "_")
-                      (inverse-parser val)]))))
-          (into {})))))
+  [obj entity inverse-parser-for-attribute inverse-parser-for-relationship]
+  (let [entity-fields (merge (:attributes entity) (:relationships entity))]
+    (->> entity-fields
+         (map (fn [[name attr-or-rel]]
+                (let [fake? (t/fake-attribs name)
+                      k (if fake? (keyword name) (t/datomic-name attr-or-rel))
+                      pre-v (k obj)
+                      val (if (nil? pre-v)
+                            (if (:to-many attr-or-rel) [] nil)
+                            pre-v)
+                      inverse-parser (cond
+                                       (nil? pre-v)
+                                       identity
+                                       (:destination-entity attr-or-rel) ;; this is relationship                           
+                                       (inverse-parser-for-relationship attr-or-rel)
+                                       :else
+                                       (inverse-parser-for-attribute attr-or-rel))]
+                  (if (and fake? (nil? pre-v))
+                    nil
+                    [(clojure.string/replace name  #"-" "_")
+                     (inverse-parser val)]))))
+         (into {}))))

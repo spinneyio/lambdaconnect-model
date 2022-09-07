@@ -2,7 +2,9 @@
   (:require [lambdaconnect-model.schema :as schema]
             [lambdaconnect-model.data-xml :as xml]
             [lambdaconnect-model.spec :as spec]
-            [lambdaconnect-model.scoping :as scoping]))
+            [lambdaconnect-model.scoping :as scoping]
+            [lambdaconnect-model.tools :as t]
+            [lambdaconnect-model.transformations :as trafo]))
 
 (defn entities-by-name
   "Generates a dictionary keyed with entity names and valued in entity representations for a given core data model file. 
@@ -61,3 +63,36 @@
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
   [scoped-entities]
   (scoping/reduce-entities scoped-entities))
+
+(defn json-to-clojure
+  "Converts json-based map into the one that conforms to the spec. "
+  [json entity]
+  (trafo/json-to-clojure json entity))
+
+(defn clojure-to-json
+  ([obj entity]
+   (trafo/clojure-to-json
+    obj
+    entity
+    t/inverse-parser-for-attribute
+    t/inverse-parser-for-relationship))
+  ([obj entity inverse-parser-for-attribute inverse-parser-for-relationship]
+   (trafo/clojure-to-json
+    obj
+    entity
+    inverse-parser-for-attribute
+    inverse-parser-for-relationship)))
+
+(defn replace-inverses
+  ([obj entity] 
+   (trafo/replace-inverses obj entity false))
+  ([obj entity untangle-singles]
+   (trafo/replace-inverses obj entity untangle-singles)))
+
+(defn datomic-name [o] 
+  (t/datomic-name o))
+
+(defn datomic-inverse-name [rel] 
+  (t/datomic-inverse-name rel))
+
+(def special-attribs t/special-attribs)
