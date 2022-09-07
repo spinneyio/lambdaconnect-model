@@ -1,0 +1,8 @@
+{:LAUser.me {:constraint [= :internalUserId :user/uuid]
+             :permissions {:modify true
+                           :create true
+                           :protected-fields ["accessToken" "internalUserId" "email"]}}
+ :LALocation.fromUser {:constraint [contains? :users :LAUser.me]
+                       :permissions {:modify true
+                                     :create false
+                                     :writable-fields ["games"]}}}
