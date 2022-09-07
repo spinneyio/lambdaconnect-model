@@ -1,10 +1,10 @@
 (ns lambdaconnect-model.scoping
   (:require [clojure.edn]
             [clojure.set :refer [subset? difference intersection union]]
-            [lambdaconnect-model.core :as model]
             [taoensso.tufte :as profile]
-            [clojure.string :as s]
-            [clojure.spec.alpha :as spec]
+            [clojure.spec.alpha :as s]
+            [lambdaconnect-model.spec :as spec]
+            [clojure.string :as str]
             [lambdaconnect-model.tools :as t]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
@@ -157,8 +157,8 @@
    applied-tags ; { tag #{id1, id2, id3, ...}, ...}
    applied-queries ; { tag {:dependencies #{:NOUser.me :NOMessage.sent} :rules [[?user :app/uuid ?m] [...]]}}
    ]
-  (let [get-entity (fn [tag] (when tag (get entities-by-name (first (clojure.string/split (or (namespace tag) (name tag)) #"\.")))))
-        symbol-for-tag #(when (keyword? %) (symbol (str "?" (reduce (fn [s1 s2] (str s1 "-" s2)) (clojure.string/split (or (namespace %) (name %)) #"\.")))))
+  (let [get-entity (fn [tag] (when tag (get entities-by-name (first (str/split (or (namespace tag) (name tag)) #"\.")))))
+        symbol-for-tag #(when (keyword? %) (symbol (str "?" (reduce (fn [s1 s2] (str s1 "-" s2)) (str/split (or (namespace %) (name %)) #"\.")))))
         entity (get-entity tag)
         entity-symbol (symbol-for-tag tag)]
 
@@ -367,12 +367,12 @@
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
   [scoped-entities]
   (into {} (map (fn [[k l]] [k (reduce union (map second l))])
-                (group-by (fn [[k v]] (keyword (first (clojure.string/split (name k) #"\."))))
+                (group-by (fn [[k v]] (keyword (first (str/split (name k) #"\."))))
                           (vec scoped-entities)))))
 
 (defn validate-pull-scope [entities-by-name edn]
   ; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
-  (model/specs entities-by-name)
+  (spec/specs-for-entities entities-by-name {})
   (letfn [(validate-constraint [constraint entity tag all-tags]
             (if (= :all constraint)
               ; we add a special 'all' constraint
@@ -415,7 +415,7 @@
                         :else (assert false (str "Unknown logical op: " constraint)))))))
 
           (correct-tag? [tag all-tags]
-            (let [parts (clojure.string/split (name tag) #"\.")]
+            (let [parts (str/split (name tag) #"\.")]
               (and
                (all-tags tag)
                (not (namespace tag))
@@ -426,7 +426,7 @@
                     (= (count parts) 1))))))
 
           (remote-field? [tag all-tags]
-            (let [parts (clojure.string/split (or (namespace tag) "") #"\.")]
+            (let [parts (str/split (or (namespace tag) "") #"\.")]
               (when (or (= (count parts) 2)
                         (and
                          (= (first parts) "user")
@@ -439,7 +439,7 @@
 
           (correct-relationship? [rel tag all-tags]
             (and (correct-tag? tag all-tags)
-                 (let [parts (clojure.string/split (or (name tag) "") #"\.")]
+                 (let [parts (str/split (or (name tag) "") #"\.")]
                    (when (or (= (count parts) 2)
                              (and
                               (= (first parts) "user")
@@ -457,7 +457,7 @@
               (assert attribute (str "Entity: " tag " doesn't have the attribute: " attribute-name))
               (assert (or (:optional attribute) (not (nil? value))) (str "Non-optional attribute " (:name attribute) " has nil value for tag: " tag))
               (assert (or (and (nil? value) (nil? parsed)) (and (not (nil? value)) (not (nil? parsed)))) (str "Unable to parse attribute " (:name attribute) " with value: " value " for tag: " tag))
-              (assert (spec/valid? (t/datomic-name attribute) parsed) (spec/explain-str (t/datomic-name attribute) parsed))))
+              (assert (s/valid? (t/datomic-name attribute) parsed) (s/explain-str (t/datomic-name attribute) parsed))))
 
           (validate-permission [tag entity permission]
             (assert (map? permission) (str "Permissions need to be a map for " tag ", " permission))
@@ -477,10 +477,10 @@
                       relationship (get (:relationships entity) field)]
                   (assert (or attribute relationship) (str "There is no such field as '" field "' in 'writable-fields' or 'protected-fields' for " tag))))))]
 
-    (let [get-entity #(first (clojure.string/split (name %) #"\."))
+    (let [get-entity #(first (str/split (name %) #"\."))
 
           all-entities (set (keys entities-by-name))
-          split-edn (map #(clojure.string/split (name %) #"\.") (keys edn))
+          split-edn (map #(str/split (name %) #"\.") (keys edn))
           entities-from-edn (set (map first split-edn))
 
           all-tags (set (keys edn))

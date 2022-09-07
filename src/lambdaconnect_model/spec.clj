@@ -116,3 +116,13 @@
                                              :opt optional))
     true))
 
+(defn specs-for-entities [entities-by-name generators]
+  (doall ; we force the computation to perform schema generation as a side effect
+   (->> entities-by-name
+        (vals)
+        (map (partial spec-for-entity generators))))
+  (doall ; we force the computation to perform schema generation as a side effect
+   (->> entities-by-name
+        (vals)
+        (map (partial datomic-spec-for-entity generators)))))
+

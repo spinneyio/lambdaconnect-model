@@ -54,8 +54,7 @@ Use generated specs:
 Define scoping:
 
 ```
-(require '[lambdaconnect-model.scoping :as tmp-scoping])
-(def scoping (tmp-scoping/read-pull-scoping-edn "resources/scope.edn" entities-by-name))
+(def scoping (tmp/read-pull-scoping-edn "resources/scope.edn" entities-by-name))
 ```
 
 ## License
