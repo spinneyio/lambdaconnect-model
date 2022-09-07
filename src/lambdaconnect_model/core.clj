@@ -56,3 +56,8 @@
    edn ; the EDN as read from configuration file
    push?]
   (scoping/scope config snapshot user entities-by-name edn push?))
+
+(defn reduce-entities
+  "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
+  [scoped-entities]
+  (scoping/reduce-entities scoped-entities))
