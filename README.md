@@ -1,6 +1,7 @@
 # lambdaconnect-model
 
-A Clojure library designed to parse CoreData model and transform it into Datomic schema.
+A Clojure library designed to parse CoreData model and transform it into Datomic schema. <br> <br>
+[![Build Status](https://app.travis-ci.com/spinneyio/lambdaconnect-model.svg?branch=master)](https://app.travis-ci.com/spinneyio/lambdaconnect-model)
 
 ## Installation
 
