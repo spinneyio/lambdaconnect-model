@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="13772" systemVersion="16G29" minimumToolsVersion="Xcode 7.3" sourceLanguage="Objective-C" userDeLAnedModelVersionIdentiLAer="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="21279" systemVersion="21G115" minimumToolsVersion="Xcode 7.3" sourceLanguage="Objective-C" userDefinedModelVersionIdentifier="">
     <entity name="LAGame" representedClassName=".LAGame" syncable="YES">
         <attribute name="active" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="NO" syncable="YES"/>
-        <attribute name="createdAt" attributeType="Date" minDateTimeInterval="0"  usesScalarValueType="NO" syncable="YES"/>
-        <attribute name="date" attributeType="Date" usesScalarValueType="NO" syncable="YES" defaultDateTimeInterval="552182740"/>
-        <attribute name="gameDescription" attributeType="String" minValueString="0" maxValueString="1024" syncable="YES"/>
+        <attribute name="createdAt" attributeType="Date" minDateTimeInterval="0" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="date" attributeType="Date" defaultDateTimeInterval="552182700" usesScalarValueType="NO" syncable="YES"/>
+        <attribute name="gameDescription" attributeType="String" minValueString="0" maxValueString="1024" syncable="YES">
+            <userInfo>
+                <entry key="datomic-description" value="blablabla"/>
+            </userInfo>
+        </attribute>
         <attribute name="inThePast" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="NO" syncable="YES"/>
         <attribute name="skillLevelRequired" attributeType="String" maxValueString="15" syncable="YES"/>
         <attribute name="teamName" optional="YES" attributeType="String" maxValueString="100" syncable="YES"/>
@@ -13,6 +17,10 @@
         <attribute name="uuid" attributeType="String" maxValueString="36" syncable="YES"/>
         <relationship name="location" maxCount="1" deletionRule="Nullify" destinationEntity="LALocation" inverseName="games" inverseEntity="LALocation" syncable="YES"/>
         <relationship name="organiser" maxCount="1" deletionRule="Nullify" destinationEntity="LAUser" inverseName="organisedGames" inverseEntity="LAUser" syncable="YES"/>
+        <userInfo>
+            <entry key="key" value="value"/>
+            <entry key="metadata" value="1"/>
+        </userInfo>
     </entity>
     <entity name="LALocation" representedClassName=".LALocation" syncable="YES">
         <attribute name="active" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="NO" syncable="YES"/>
