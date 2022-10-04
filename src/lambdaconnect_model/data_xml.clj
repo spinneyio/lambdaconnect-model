@@ -3,7 +3,8 @@
             [clojure.algo.generic.functor :refer [fmap]]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
-            [lambdaconnect-model.tools :as t]))
+            [lambdaconnect-model.tools :as t]
+            [lambdaconnect-model.data-xml :as xml]))
 
 (defn regex? [r] (instance? java.util.regex.Pattern r))
 
@@ -44,6 +45,7 @@
 (s/def ::min-value (s/nilable (s/or :db.type/long int? :db.type/instant inst?)))
 (s/def ::optional boolean?)
 (s/def ::indexed boolean?)
+(s/def ::user-info (s/nilable (s/map-of string? string?)))
 
 (s/def ::attribute (s/keys
                     :req-un
@@ -51,7 +53,8 @@
                      ::type
                      ::optional
                      ::indexed
-                     ::entity-name]
+                     ::entity-name
+                     ::user-info]
                     :opt-un
                     [::default-value
                      ::regular-expression
@@ -66,7 +69,8 @@
                       default-value
                       regular-expression
                       max-value
-                      min-value])
+                      min-value
+                      user-info])
 
 (s/def ::to-many boolean?)
 (s/def ::destination-entity string?)
@@ -82,7 +86,8 @@
                         ::to-many
                         ::destination-entity
                         ::inverse-name
-                        ::inverse-entity]
+                        ::inverse-entity
+                        ::user-info]
                        :opt-un [::max-count]))
 
 (defrecord Relationship [name
@@ -92,7 +97,8 @@
                          destination-entity
                          inverse-name
                          inverse-entity
-                         max-count])
+                         max-count
+                         user-info])
 
 (s/def ::attributes (s/map-of string? ::attribute))
 (s/def ::relationships (s/map-of string? ::relationship))
@@ -100,7 +106,8 @@
 
 (s/def ::entity (s/keys :req-un [::name
                                  ::attributes
-                                 ::relationships]
+                                 ::relationships
+                                 ::user-info]
                         :opt-un [::datomic-relationships]))
 
 ; Datomic-relationships is a filtered version of relationships, holding the relationship object.
@@ -111,7 +118,8 @@
 (defrecord Entity [name
                    attributes
                    relationships
-                   datomic-relationships])
+                   datomic-relationships
+                   user-info])
 
 ; ------------ PARSING ------------
 
@@ -146,10 +154,11 @@
    nil
    nil
    nil
+   nil
    nil))
 
 
-(defn attribute-from-xml [entity-name xml]
+(defn attribute-from-xml [entity-name xml user-info]
   (let [type (->type (:attributeType xml))]
     (->Attribute
      (:name xml)
@@ -160,11 +169,12 @@
      (->value (or (:defaultValueString xml) (:defaultDateTimeInterval xml)) type)
      (->regex (:regularExpressionString xml))
      (or (->int (:maxValueString xml)) (->date (:maxDateTimeInterval xml)))
-     (or (->int (:minValueString xml)) (->date (:minDateTimeInterval xml))))))
+     (or (->int (:minValueString xml)) (->date (:minDateTimeInterval xml)))
+     user-info)))
 
 (s/fdef attribute-from-xml :ret ::attribute)
 
-(defn relationship-from-xml [entity-name xml]
+(defn relationship-from-xml [entity-name xml user-info]
   (->Relationship
    (:name xml)
    entity-name
@@ -173,9 +183,18 @@
    (:destinationEntity xml)
    (:inverseName xml)
    (:inverseEntity xml)
-   (->int (:maxCount xml))))
+   (->int (:maxCount xml))
+   user-info))
 
 (s/fdef relationship-from-xml :ret ::relationship)
+
+(defn user-info-from-xml [xml]
+  (->> xml
+       (filter #(= :userInfo (:tag %)))
+       (mapcat #(->> % :content (map (comp (juxt :key :value) :attrs))))
+       (into {})))
+
+(s/fdef user-info-from-xml :ret ::user-info)
 
 (defn entity-from-xml
   "Parses an entity from its pre-parsed xml tree"
@@ -186,7 +205,8 @@
                          (fmap first
                                (group-by :name
                                          (map
-                                          (comp (partial f name) :attrs)
+                                          (comp (partial apply f name)
+                                                (juxt :attrs (comp user-info-from-xml :content)))
                                           (filter #(and (= type (:tag %))
                                                         (not (:transient %)))
                                                   (:content xml))))))]
@@ -197,7 +217,8 @@
          (assoc "syncRevision" (->sync-revision name))
          (dissoc "isSuitableForPush"))
      (parse-elements relationship-from-xml :relationship)
-     nil))) ; no datomic relationships at this stage
+     nil ; no datomic relationships at this stage
+     (-> xml :content user-info-from-xml))))
 
 (s/fdef entity-from-xml :ret ::entity)
 

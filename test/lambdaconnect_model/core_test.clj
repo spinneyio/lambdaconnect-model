@@ -38,4 +38,9 @@
       (is (= (+ 37 (count model)) (count schema)))))
 
   (testing "Specs"
-    (mp/specs (mp/entities-by-name "resources/model.xml"))))
+    (mp/specs (mp/entities-by-name "resources/model.xml")))
+  
+  (testing "User info"
+    (let [model (mp/entities-by-name "resources/model.xml")]
+      (is (seq (get-in model ["LAGame" :user-info])))
+      (is (seq (get-in model ["LAGame" :attributes "gameDescription"]))))))
