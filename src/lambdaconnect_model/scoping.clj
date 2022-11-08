@@ -92,7 +92,7 @@
 
 (defn execute-query-generic [config tag query]
 ;  (println "Trying to execute query: " query)  
-  (let [res (profile/p tag (set (or (apply (:q config) query) #{})))]
+  (let [res (profile/p tag (->> query (apply (:q config)) (mapv first) set))]
  ;   (println "COMPUTED:" res)
     [tag res]))
 
@@ -288,7 +288,7 @@
             additional-rules (reverse (dependent-rules dependencies))
             full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol})) ;(concat additional-rules rules)
             ]
-        [(vec (concat [`[:find [~entity-symbol ...] :in ~'$ [~'?user ...] :where ~@full-rules] snapshot (:user applied-tags)]))
+        [(vec (concat [`[:find ~entity-symbol :in ~'$ [~'?user ...] :where ~@full-rules] snapshot (:user applied-tags)]))
          rules
          dependencies]))))
 
