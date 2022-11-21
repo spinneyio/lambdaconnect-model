@@ -3,6 +3,7 @@
             [lambdaconnect-model.data-xml :as xml]
             [lambdaconnect-model.spec :as spec]
             [lambdaconnect-model.scoping :as scoping]
+            [lambdaconnect-model.scope-single-tag :as single] 
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.transformations :as trafo]))
 
@@ -43,6 +44,32 @@
   "Read and validate scoping edn."
   [path entities-by-name]
   (scoping/read-pull-scoping-edn path entities-by-name))
+
+(defn get-minim-scoping-sets 
+  "Given a validated scoping
+   returns map of sets which has tags as key and each set keeps
+   tags required for scoping that tag"
+  [validated-scoping]
+  (single/get-minimum-scoping-sets validated-scoping))
+
+(defn scope-single-tag
+  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
+   It is advised to calculacte scoping sets once and pass the result.
+  A typical invocation looks like this: 
+  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config
+   snapshot ; db snapshot
+   user ; user object
+   entities-by-name ; coming from xml model parser
+   edn ; the EDN as read from configuration file
+   tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
+   tag ;tag to be scoped
+   ]
+  (single/scope-single-tag config snapshot user entities-by-name edn tag-scope tag))
 
 (defn scope
   "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.

@@ -2,7 +2,7 @@
   (:require [clojure.edn] 
             [clojure.set :as set]))
 
-(defn get-parents
+(defn- get-parents
   "returns list of parent tags given the list of contraints
    element is a current clause or operator"
   ([constraints]
@@ -37,7 +37,7 @@
 
        :else (throw (Exception. (str "Encountered unexpeced cur-element" cur-element)))))))
 
-(defn build-dependency-tree
+(defn- build-dependency-tree
   "Reads scoping and builds tree which describes dependency between tags
    each edge represents a dependency: 
    if tag B has ingoing edge from tag A it means that tag A is present in tag's B contraint
@@ -60,7 +60,7 @@
                                     [empty-edge-map empty-edge-map #{}] scoping)]
     dependency-tree))
 
-(defn DFS
+(defn- DFS
   [cur-tag out visited call-stack] 
   (let [cur-visited (conj visited cur-tag)
         cur-call-stack (conj call-stack cur-tag)
@@ -73,7 +73,7 @@
             {cur-tag call-stack} children-paths)))
 
 (defn get-minimum-scoping-sets
-  "Given a dependency tree and a validated scoping
+  "Given a validated scoping
    returns map of sets which has tags as key and each set keeps
    tags required for scoping that tag"
   [validated-scoping]
@@ -83,8 +83,34 @@
     (reduce (fn [cur-paths new-path] (merge cur-paths new-path))
             paths)))
 
+(defn scope-single-tag
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
+   It is advised to calculacte scoping sets once and pass the result.
+  A typical invocation looks like this: 
+  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
 
-;(build-dependency-tree play/validated-scoping)
-(def test-contraintV2 '(or [= :restaurant :tag1.tmp] (and [= :restaurant :tag2.tmp] (not [contains? :restaurant :user/uuid]))))
-(def owner-scope (read-string (slurp "resources/model/owner-scope.edn")))
-(def employee-scope (read-string (slurp "resources/model/employee-scope.edn")))
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config
+   snapshot ; db snapshot
+   user ; user object
+   entities-by-name ; coming from xml model parser
+   edn ; the EDN as read from configuration file
+   tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
+   tag ;tag to be scoped
+   ]
+  (let [relevant-rules (->> edn
+                            (filter (fn [[k _]] (contains? (tag tag-scope) k)))
+                            (map (fn [[tag description]] [tag (:constraint description)]))
+                            (into {}))]
+    (into {} (map(fn [x] 
+                   (apply (partial execute-query config) x))
+                   (scoping-step
+                    snapshot
+                    #{(:db/id user)}
+                    entities-by-name
+                    {}
+                    #{:user}
+                    relevant-rules
+                    {:user {:dependencies #{} :rules []}})))))
