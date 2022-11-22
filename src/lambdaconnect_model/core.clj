@@ -69,7 +69,7 @@
    tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
    tag ;tag to be scoped
    ]
-  (single/scope-single-tag config snapshot user entities-by-name edn tag-scope tag))
+  (scoping/scope-single-tag config snapshot user entities-by-name edn tag-scope tag))
 
 (defn scope
   "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.

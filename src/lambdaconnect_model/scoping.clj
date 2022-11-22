@@ -329,6 +329,37 @@
 ; ========================================================================================
 
 
+(defn scope-single-tag
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
+   It is advised to calculacte scoping sets once and pass the result.
+  A typical invocation looks like this: 
+  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config
+   snapshot ; db snapshot
+   user ; user object
+   entities-by-name ; coming from xml model parser
+   edn ; the EDN as read from configuration file
+   tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
+   tag ;tag to be scoped
+   ]
+  (let [relevant-rules (->> edn
+                            (filter (fn [[k _]] (contains? (tag tag-scope) k)))
+                            (map (fn [[tag description]] [tag (:constraint description)]))
+                            (into {}))]
+    (into {} (map(fn [x] 
+                   (apply (partial execute-query config) x))
+                   (scoping-step
+                    snapshot
+                    #{(:db/id user)}
+                    entities-by-name
+                    {}
+                    #{:user}
+                    relevant-rules
+                    {:user {:dependencies #{} :rules []}})))))
 (defn scope
   "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.
   A typical invocation looks like this: 
