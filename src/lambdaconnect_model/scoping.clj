@@ -380,8 +380,7 @@
                                            (or (not push?)
                                                (-> description :permissions :create)
                                                (-> description :permissions :modify)
-                                               (-> description :permissions :include-in-push))
-                                           true))) ;czy to true nie jest zbędne?
+                                               (-> description :permissions :include-in-push)))))
                             (map (fn [[tag description]] [tag (:constraint description)]))
                             (into {}))]
     (into {} (pmap #(apply (partial execute-query config) %)

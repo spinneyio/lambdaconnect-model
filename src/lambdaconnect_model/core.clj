@@ -56,7 +56,7 @@
   "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
-  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
 
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}

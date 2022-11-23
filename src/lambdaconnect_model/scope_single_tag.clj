@@ -17,7 +17,7 @@
        (let [am-i-root? (if root? root? (= :user/uuid (last cur-element)))]
          [(if am-i-root? parent-set (conj parent-set (last cur-element))) am-i-root?])
 
-       (not (list? cur-element)) (throw (Exception. (str "Encountered unexpeced cur-element " cur-element)))
+       (not (list? cur-element)) (throw (Exception. (str "Encountered unexpected cur-element " cur-element)))
 
        (= 'not (first cur-element))
        (recur (first constraints-left)
@@ -30,12 +30,12 @@
                                 (cond
                                   (vector? element) [#{(last element)} (if root? root? (= :user/uuid (last cur-element)))]
                                   (list? element) (get-parents element)
-                                  :else (throw (Exception. (str "Encountered unexpeced element" element)))))]
+                                  :else (throw (Exception. (str "Encountered unexpected element" element)))))]
          (reduce (fn [[cur-parents cur-root?] [parents-remaining is-root?]]
                    [(clojure.set/union cur-parents parents-remaining) (or cur-root? is-root?)])
                  parent-sets-list))
 
-       :else (throw (Exception. (str "Encountered unexpeced cur-element" cur-element)))))))
+       :else (throw (Exception. (str "Encountered unexpected cur-element" cur-element)))))))
 
 (defn- build-dependency-tree
   "Reads scoping and builds tree which describes dependency between tags
