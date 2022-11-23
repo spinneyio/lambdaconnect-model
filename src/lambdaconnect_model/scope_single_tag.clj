@@ -50,7 +50,9 @@
                             (map (fn [tag] [tag #{}]))
                             (into {})) 
         dependency-tree (reduce (fn [[in out roots] [tag attrs]]
-                                      (let [[tag-parents root?] (get-parents (:constraint attrs))
+                                      (let [[tag-parents root?] (if (= :all (:constraint attrs))
+                                                                  [tags false]
+                                                                  (get-parents (:constraint attrs)))
                                             updated-in (update in tag into tag-parents)
                                             updated-out (reduce (fn [out parent-tag]
                                                                   (update out parent-tag conj tag))
