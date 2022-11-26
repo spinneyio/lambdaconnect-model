@@ -3,9 +3,11 @@
             [clojure.set :refer [subset? difference intersection union]]
             [taoensso.tufte :as profile]
             [clojure.spec.alpha :as s]
+            [lambdaconnect-model.utils :refer [relevant-tags]]
             [lambdaconnect-model.spec :as spec]
             [clojure.string :as str]
-            [lambdaconnect-model.tools :as t]))
+            [lambdaconnect-model.tools :as t]
+            [clojure.pprint :as pprint]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
 
@@ -129,25 +131,6 @@
 
 ; incoming json: {"FIUser" 123 "FIGame" 344} is a dictionary with entity names as keys
 
-(defn- relevant-tags
-  "Takes a rule (e.g. [= :client :NOClient.me]) and 
-   returns a set of all the tags included in the rule (in this case #{:NOClient.me}
-
-  Other example: (or (not [= :client :NOClient.me]) [= :uuid :NOClient.they/uuid]) -> #{:NOClient.me :NOClient.they}
-  "
-  [rule] ; a single top-level rule taken from edn 
-  (if (list? rule)
-    (let [op (first rule)]
-      (case op
-        'not (relevant-tags (second rule))
-        (reduce union #{} (map relevant-tags (rest rule)))))
-    ;else
-    (if-let [tag (when-not (= rule :all) (last rule))]
-      (if-not (keyword? tag) #{}
-              (if-not (namespace tag)
-                #{tag}
-                #{(keyword (namespace tag))}))
-      #{})))
 
 (defn- query-for-rule
   [snapshot
@@ -328,9 +311,8 @@
 ;                              INTERFACE
 ; ========================================================================================
 
-
-(defn scope-single-tag
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
+(defn scope-selected-tags
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, map of sets indiacting which tags must be scoped per tag and a set of desired tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
   (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
@@ -342,24 +324,30 @@
    snapshot ; db snapshot
    user ; user object
    entities-by-name ; coming from xml model parser
-   edn ; the EDN as read from configuration file
+   scoping-defintion ; the scoping-defintion as read from configuration file
    tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
-   tag ;tag to be scoped
+   tags ;set of tags to be scoped
    ]
-  (let [relevant-rules (->> edn
-                            (filter (fn [[k _]] (contains? (tag tag-scope) k)))
-                            (map (fn [[tag description]] [tag (:constraint description)]))
-                            (into {}))]
-    (into {} (map(fn [x] 
-                   (apply (partial execute-query config) x))
-                   (scoping-step
-                    snapshot
-                    #{(:db/id user)}
-                    entities-by-name
-                    {}
-                    #{:user}
-                    relevant-rules
-                    {:user {:dependencies #{} :rules []}})))))
+  (let [relevant-rules (->> tags
+                            (map (fn [tag]
+                                   (->> scoping-defintion
+                                        (filter (fn [[k _]] (contains? (tag tag-scope) k)))
+                                        (map (fn [[tag description]] [tag (:constraint description)]))
+                                        (into {}))))
+                            (reduce merge))
+        queries (scoping-step
+                 snapshot
+                 #{(:db/id user)}
+                 entities-by-name
+                 {}
+                 #{:user}
+                 relevant-rules
+                 {:user {:dependencies #{} :rules []}})
+        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
+    (->> filtered-queries
+         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (into {}))))
+
 (defn scope
   "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.
   A typical invocation looks like this: 

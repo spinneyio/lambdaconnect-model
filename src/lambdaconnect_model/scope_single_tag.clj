@@ -1,41 +1,7 @@
 (ns lambdaconnect-model.scope-single-tag
   (:require [clojure.edn] 
-            [clojure.set :as set]))
-
-(defn- get-parents
-  "returns list of parent tags given the list of contraints
-   element is a current clause or operator"
-  ([constraints]
-   (if (vector? constraints)
-     (get-parents constraints [] #{} false)
-     (get-parents constraints (rest constraints) #{} false)))
-  ([cur-element constraints-left parent-set root?] 
-   (if-not cur-element
-     [parent-set root?]
-     (cond
-       (vector? cur-element)
-       (let [am-i-root? (if root? root? (= :user/uuid (last cur-element)))]
-         [(if am-i-root? parent-set (conj parent-set (last cur-element))) am-i-root?])
-
-       (not (list? cur-element)) (throw (Exception. (str "Encountered unexpected cur-element " cur-element)))
-
-       (= 'not (first cur-element))
-       (recur (first constraints-left)
-              (rest constraints-left)
-              parent-set
-              root?)
-
-       (contains? #{'or 'and} (first cur-element))
-       (let [parent-sets-list (for [element (rest cur-element)]
-                                (cond
-                                  (vector? element) [#{(last element)} (if root? root? (= :user/uuid (last cur-element)))]
-                                  (list? element) (get-parents element)
-                                  :else (throw (Exception. (str "Encountered unexpected element" element)))))]
-         (reduce (fn [[cur-parents cur-root?] [parents-remaining is-root?]]
-                   [(clojure.set/union cur-parents parents-remaining) (or cur-root? is-root?)])
-                 parent-sets-list))
-
-       :else (throw (Exception. (str "Encountered unexpected cur-element" cur-element)))))))
+            [clojure.set :as set]
+            [lambdaconnect-model.utils :refer [relevant-tags]]))
 
 (defn- build-dependency-tree
   "Reads scoping and builds tree which describes dependency between tags
@@ -50,9 +16,8 @@
                             (map (fn [tag] [tag #{}]))
                             (into {})) 
         dependency-tree (reduce (fn [[in out roots] [tag attrs]]
-                                      (let [[tag-parents root?] (if (= :all (:constraint attrs))
-                                                                  [tags false]
-                                                                  (get-parents (:constraint attrs)))
+                                      (let [tag-parents (relevant-tags (:constraint attrs))
+                                            root? (contains? tag-parents :user)
                                             updated-in (update in tag into tag-parents)
                                             updated-out (reduce (fn [out parent-tag]
                                                                   (update out parent-tag conj tag))
@@ -82,6 +47,8 @@
   (let [[in out roots] (build-dependency-tree validated-scoping)
         paths (for [root roots]
                 (DFS root out #{} #{}))]
-    (reduce (fn [cur-paths new-path] (merge cur-paths new-path))
-            paths)))
+    (->> paths
+         (reduce (fn [cur-paths new-path] (merge cur-paths new-path)))
+         (map (fn [[tag path]] [tag (conj path tag)]))
+         (into {}))))
 

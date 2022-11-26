@@ -52,7 +52,7 @@
   [validated-scoping]
   (single/get-minimum-scoping-sets validated-scoping))
 
-(defn scope-single-tag
+(defn scope-selected-tags
   "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a desired tag.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
@@ -69,7 +69,7 @@
    tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
    tag ;tag to be scoped
    ]
-  (scoping/scope-single-tag config snapshot user entities-by-name edn tag-scope tag))
+  (scoping/scope-selected-tags config snapshot user entities-by-name edn tag-scope tag))
 
 (defn scope
   "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.
