@@ -6,8 +6,7 @@
             [lambdaconnect-model.utils :refer [relevant-tags]]
             [lambdaconnect-model.spec :as spec]
             [clojure.string :as str]
-            [lambdaconnect-model.tools :as t]
-            [clojure.pprint :as pprint]))
+            [lambdaconnect-model.tools :as t]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
 
