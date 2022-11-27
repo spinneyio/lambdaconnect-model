@@ -36,7 +36,7 @@
                            (DFS child out cur-visited cur-call-stack)
                            (when (contains? call-stack child)
                              (throw (Exception. (str "Cycle deteced, back edge from: " cur-tag " to: " child))))))] 
-    (reduce (fn [cur-paths new-path] (merge-with clojure.set/union cur-paths new-path))
+    (reduce (fn [cur-paths new-path] (merge-with set/union cur-paths new-path))
             {cur-tag call-stack} children-paths)))
 
 (defn get-minimum-scoping-sets
@@ -46,9 +46,41 @@
   [validated-scoping]
   (let [[in out roots] (build-dependency-tree validated-scoping)
         paths (for [root roots]
-                (DFS root out #{} #{}))]
-    (->> paths
-         (reduce (fn [cur-paths new-path] (merge cur-paths new-path)))
-         (map (fn [[tag path]] [tag (conj path tag)]))
-         (into {}))))
+                (DFS root out #{} #{}))
+        conjoined-paths (->> paths
+                             (reduce (fn [cur-paths new-path] (merge cur-paths new-path)))
+                             (map (fn [[tag path]] [tag (conj path tag)]))
+                             (into {}))
+        ;DFS skips those tags as they are neither root nor they have any edges in (so they are detached from the tree)
+        missing-tags (set/difference (set (keys validated-scoping)) (set (keys conjoined-paths)))
+        completed-paths (reduce (fn [scoping-paths missing-tag]
+                                  (assert (= :all (get-in validated-scoping [missing-tag :constraint]))
+                                          (str "tag different than :all contrained tag was missed (scoping tree is not connected?)"))
+                                  (assoc scoping-paths missing-tag #{missing-tag}))
+                                conjoined-paths missing-tags)]
+    (assert (= (count (keys validated-scoping)) (count (keys completed-paths)))
+            (str "tags: " (set/difference #{(keys validated-scoping)} #{(keys conjoined-paths)}) " do not have a path!"))
+    completed-paths))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;_ (println "-------------------------------IN-------------------------------")
+        ;_ (clojure.pprint/pprint in)
+        ;_ (println "-------------------------------OUT-------------------------------")
+        ;_ (clojure.pprint/pprint out)
+;_ (println "-------------------------------PATHS-------------------------------")
+        ;_ (clojure.pprint/pprint paths)
+;_ (println "-------------------------------RES-------------------------------")
+        ;_ (clojure.pprint/pprint res)
 
