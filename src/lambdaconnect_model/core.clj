@@ -66,8 +66,18 @@
 
 (defn json-to-clojure
   "Converts json-based map into the one that conforms to the spec. "
-  [json entity]
-  (trafo/json-to-clojure json entity))
+  ([json entity]
+   (trafo/json-to-clojure
+    json
+    entity
+    t/parser-for-attribute
+    t/parser-for-relationship))
+  ([json entity parser-for-attribute parser-for-relationship]
+   (trafo/json-to-clojure
+    json
+    entity
+    parser-for-attribute
+    parser-for-relationship)))
 
 (defn clojure-to-json
   ([obj entity]
