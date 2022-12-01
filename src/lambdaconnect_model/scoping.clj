@@ -310,7 +310,7 @@
 ;                              INTERFACE
 ; ========================================================================================
 
-(defn scope-selected-tags
+(defn scope-selected-tags-with-tree
   "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, map of sets indiacting which tags must be scoped per tag and a set of desired tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
@@ -334,6 +334,44 @@
                                         (map (fn [[tag description]] [tag (:constraint description)]))
                                         (into {}))))
                             (reduce merge))
+        queries (scoping-step
+                 snapshot
+                 #{(:db/id user)}
+                 entities-by-name
+                 {}
+                 #{:user}
+                 relevant-rules
+                 {:user {:dependencies #{} :rules []}})
+        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
+    (->> filtered-queries
+         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (into {}))))
+
+(defn scope-selected-tags
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, and a set of desired tags.
+   It is advised to calculacte scoping sets once and pass the result.
+  A typical invocation looks like this: 
+  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config
+   snapshot ; db snapshot
+   user ; user object
+   entities-by-name ; coming from xml model parser
+   scoping-defintion ; the scoping-defintion as read from configuration file 
+   tags ;set of tags to be scoped
+   push?]
+  (let [relevant-rules (->> scoping-defintion
+                            (filter (fn [[_ description]]
+                                      (and (:constraint description)
+                                           (or (not push?)
+                                               (-> description :permissions :create)
+                                               (-> description :permissions :modify)
+                                               (-> description :permissions :include-in-push)))))
+                            (map (fn [[tag description]] [tag (:constraint description)]))
+                            (into {}))
         queries (scoping-step
                  snapshot
                  #{(:db/id user)}
