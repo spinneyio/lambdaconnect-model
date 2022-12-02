@@ -53,7 +53,7 @@
   (single/get-minimum-scoping-sets validated-scoping))
 
 (defn scope-selected-tags-with-tree
-  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indicating which tags must be scoped per tag and a set of deisred tags.
+  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indicating which tags must be scoped per tag and a set of desired tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
   (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
