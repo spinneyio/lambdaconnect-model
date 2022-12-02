@@ -319,14 +319,7 @@
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   scoping-defintion ; the scoping-defintion as read from configuration file
-   tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
-   tags ;set of tags to be scoped
-   ]
+  [config snapshot user entities-by-name scoping-defintion tag-scope tags]
   (let [relevant-rules (->> tags
                             (map (fn [tag]
                                    (->> scoping-defintion
@@ -356,13 +349,7 @@
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   scoping-defintion ; the scoping-defintion as read from configuration file 
-   tags ;set of tags to be scoped
-   push?]
+  [config snapshot user entities-by-name scoping-defintion tags push?]
   (let [relevant-rules (->> scoping-defintion
                             (filter (fn [[_ description]]
                                       (and (:constraint description)
@@ -386,20 +373,15 @@
          (into {}))))
 
 (defn scope
-  "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.
+  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.
   A typical invocation looks like this: 
   (scope (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")))
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
   "
-  [config
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   edn ; the EDN as read from configuration file
-   push?]
-  (let [relevant-rules (->> edn
+  [config snapshot user entities-by-name scoping-defintion push?]
+  (let [relevant-rules (->> scoping-defintion
                             (filter (fn [[_ description]]
                                       (and (:constraint description)
                                            (or (not push?)

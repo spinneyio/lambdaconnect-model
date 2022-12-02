@@ -9,22 +9,23 @@
    if tag B has ingoing edge from tag A it means that tag A is present in tag's B contraint
    if tag A has outgoing edge to B it means that tag B has tag A in its contraints
    edges are represent as map of sets: tag #{set of in/out going edges}, roots are stored in set
-   returns a tuple [ingoding edges, outgoing edges, roots (where root is a tag with :user/uuid in its contraints)]" 
+   returns a tuple [ingoing edges, outgoing edges, roots (where root is a tag with :user/uuid in its contraints)]" 
   [scoping]
-  (let [tags (keys scoping)
+  (let [root-tag :user
+        tags (keys scoping)
         empty-edge-map (->> tags
                             (map (fn [tag] [tag #{}]))
                             (into {})) 
         dependency-tree (reduce (fn [[in out roots] [tag attrs]]
-                                      (let [tag-parents (relevant-tags (:constraint attrs))
-                                            root? (contains? tag-parents :user)
-                                            updated-in (update in tag into tag-parents)
-                                            updated-out (reduce (fn [out parent-tag]
-                                                                  (update out parent-tag conj tag))
-                                                                out tag-parents)
-                                            updated-roots (if root? (conj roots tag) roots)]
-                                        [updated-in updated-out updated-roots]))
-                                    [empty-edge-map empty-edge-map #{}] scoping)]
+                                  (let [tag-parents (relevant-tags (:constraint attrs))
+                                        root? (contains? tag-parents root-tag)
+                                        updated-in (update in tag into tag-parents)
+                                        updated-out (reduce (fn [out parent-tag]
+                                                              (update out parent-tag conj tag))
+                                                            out tag-parents)
+                                        updated-roots (if root? (conj roots tag) roots)]
+                                    [updated-in updated-out updated-roots]))
+                                [empty-edge-map empty-edge-map #{}] scoping)]
     dependency-tree))
 
 (defn- DFS
@@ -61,26 +62,3 @@
     (assert (= (count (keys validated-scoping)) (count (keys completed-paths)))
             (str "tags: " (set/difference #{(keys validated-scoping)} #{(keys conjoined-paths)}) " do not have a path!"))
     completed-paths))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-;_ (println "-------------------------------IN-------------------------------")
-        ;_ (clojure.pprint/pprint in)
-        ;_ (println "-------------------------------OUT-------------------------------")
-        ;_ (clojure.pprint/pprint out)
-;_ (println "-------------------------------PATHS-------------------------------")
-        ;_ (clojure.pprint/pprint paths)
-;_ (println "-------------------------------RES-------------------------------")
-        ;_ (clojure.pprint/pprint res)
-

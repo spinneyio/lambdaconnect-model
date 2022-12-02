@@ -53,56 +53,39 @@
   (single/get-minimum-scoping-sets validated-scoping))
 
 (defn scope-selected-tags-with-tree
-  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indiacting which tags must be scoped per tag and a set of deisred tags.
+  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indicating which tags must be scoped per tag and a set of deisred tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
-  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
 
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   scoping-defintion ; the EDN as read from configuration file
-   tag-scope ; map of sets contating minimal sets of tag which must be evaulated fo given tag (build with get-minim-scoping-set)
-   tags ;set of tags to be scoped
-   ]
+  [config snapshot user entities-by-name scoping-defintion tag-scope tags]
   (scoping/scope-selected-tags-with-tree config snapshot user entities-by-name scoping-defintion tag-scope tags))
 
 (defn scope-selected-tags
   "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, a set of desired tags and push?.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
-  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
 
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   scoping-defintion ; the EDN as read from configuration file 
-   tags ;set of tags to be scoped
-   push?]
+  [config snapshot user entities-by-name scoping-defintion tags push?]
   (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags push?))
 
 (defn scope
-  "Takes a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules.
+  "Takes config map, a snapshot, a user object from DB, entities-by-name, the parsed EDN of rules (scoping-defintion) and a bool push?.
   A typical invocation looks like this: 
   (scope (d/db db/conn) user entities-by-name pull-scoping-edn)
 
   Returns a map with db ids, something like:
-  {:FIUser.me #{11122, 1222} :user #{2312312}}"
-  [config ; {:q datomic/q} 
-   snapshot ; db snapshot
-   user ; user object
-   entities-by-name ; coming from xml model parser
-   edn ; the EDN as read from configuration file
-   push?]
-  (scoping/scope config snapshot user entities-by-name edn push?))
+  {:FIUser.me #{11122, 1222} :user #{2312312}}
+   "
+  [config snapshot user entities-by-name scoping-defintion push?]
+  (scoping/scope config snapshot user entities-by-name scoping-defintion push?))
 
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
