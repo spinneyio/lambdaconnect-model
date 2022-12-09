@@ -4,7 +4,7 @@
 
 (defn json-to-clojure
   "Converts json-based map into the one that conforms to the spec. "
-  [json entity]
+  [json entity parser-for-attribute parser-for-relationship]
   (into {}
         (keep identity (map (fn [[k val]]
                               (let [key (clojure.string/replace k #"_" "-")
@@ -12,7 +12,7 @@
                                     rel  (get (:relationships entity) key)]
                                 (assert (or rel attr) (str "The json does not match the entity '" (:name entity) "'. The attribute attribute: " key " with value: '" val "' does not exist in the model."))
                                 [(t/datomic-name (or attr rel)), (if (and (nil? val) (:optional attr)) nil
-                                                                     ((if attr (t/parser-for-attribute attr) (t/parser-for-relationship rel)) val))])) json))))
+                                                                     ((if attr (parser-for-attribute attr) (parser-for-relationship rel)) val))])) json))))
 
 (defn- inverses-fun [names entity]
   (into {} (map (fn [n] (let [inverse (t/relationship-for-inverse-name entity n)]
