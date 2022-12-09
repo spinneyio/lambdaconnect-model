@@ -314,7 +314,7 @@
   "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, map of sets indiacting which tags must be scoped per tag and a set of desired tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
-  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
+  (scope-selected-tags-with-tree config (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
 
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
@@ -341,24 +341,13 @@
          (into {}))))
 
 (defn scope-selected-tags
-  "Takes: snapshot
-   a snapshot, 
-   a user object from DB,
-   entities-by-name, parsed (and validated) EDN of scoping rules, 
-   a set of desired tags, 
-   execute? which determines if queries created will be executed,
-   and push? which seerves purpose beyond my knowledge.
-   It is advised to calculacte scoping sets once and pass the result.
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
   A typical invocation looks like this: 
-  (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
-
-  if execute? == true returns:
-   a map with db ids, something like:
+  (scope-selected-tags config (d/db db/conn) user entities-by-name validated-scope desired-tags #{:RARestaurant.ofOwner})))
+  Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
-   otherwise:
-   
   "
-  [config snapshot user entities-by-name scoping-defintion tags execute? push?]
+  [config snapshot user entities-by-name scoping-defintion tags push?]
   (let [relevant-rules (->> scoping-defintion
                             (filter (fn [[_ description]]
                                       (and (:constraint description)
@@ -377,18 +366,57 @@
                  relevant-rules
                  {:user {:dependencies #{} :rules []}})
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
-    (if execute?
-      (->> filtered-queries
-           (pmap (fn [x] (apply (partial execute-query config) x)))
-           (into {}))
-      (->> filtered-queries
+    (->> filtered-queries
+         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (into {}))))
+
+(defn get-scoping-queries
+  "Takes entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
+   A typical invocation looks like this: 
+   (get-scoping-queries entities-by-name validated-scope desired-tags #{:RARestaurant.ofEmployee :RARestaurant.ofOwner})))
+   Returns a map with tags and queries generated to obtain entities for indicated user:
+  {:RAEmployee.ofOwner
+  [:find
+  ?RAEmployee-ofOwner
+  :in
+  $
+  [?user ...]
+  :where
+  [?user :app/uuid ?G__33023]
+  [(= ?G__33024 ?G__33023)]
+  [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+  [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]}
+   ...
+  "
+  [entities-by-name scoping-defintion tags push?]
+  (let [user {:db/id 1111111}
+        snapshot {}
+        relevant-rules (->> scoping-defintion
+                            (filter (fn [[_ description]]
+                                      (and (:constraint description)
+                                           (or (not push?)
+                                               (-> description :permissions :create)
+                                               (-> description :permissions :modify)
+                                               (-> description :permissions :include-in-push)))))
+                            (map (fn [[tag description]] [tag (:constraint description)]))
+                            (into {}))
+        queries (scoping-step
+                 snapshot
+                 #{(:db/id user)}
+                 entities-by-name
+                 {}
+                 #{:user}
+                 relevant-rules
+                 {:user {:dependencies #{} :rules []}})
+        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
+    (->> filtered-queries
            (map (fn [[tag query]] [tag (first query)]))
-           (into {})))))
+           (into {}))))
 
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.
   A typical invocation looks like this: 
-  (scope (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")))
+  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")))
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}

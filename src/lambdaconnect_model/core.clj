@@ -53,10 +53,10 @@
   (single/get-minimum-scoping-sets validated-scoping))
 
 (defn scope-selected-tags-with-tree
-  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, map of sets indicating which tags must be scoped per tag and a set of desired tags.
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, map of sets indiacting which tags must be scoped per tag and a set of desired tags.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
-  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
+  (scope-selected-tags-with-tree config (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
 
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
@@ -65,16 +65,36 @@
   (scoping/scope-selected-tags-with-tree config snapshot user entities-by-name scoping-defintion tag-scope tags))
 
 (defn scope-selected-tags
-  "Takes a config map, a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of rules, a set of desired tags and push?.
-   It is advised to calculacte scoping sets once and pass the result.
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
   A typical invocation looks like this: 
-  (scope-single-tag (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
-
+  (scope-selected-tags config (d/db db/conn) user entities-by-name validated-scope desired-tags #{:RARestaurant.ofOwner})))
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config snapshot user entities-by-name scoping-defintion tags execute? push?]
-  (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags execute? push?))
+  [config snapshot user entities-by-name scoping-defintion tags push?]
+  (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags  push?))
+
+(defn get-scoping-queries
+  "Takes entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
+   A typical invocation looks like this: 
+   (get-scoping-queries entities-by-name validated-scope desired-tags #{:RARestaurant.ofEmployee :RARestaurant.ofOwner})))
+   Returns a map with tags and queries generated to obtain entities for indicated user:
+  {:RAEmployee.ofOwner
+  [:find
+  ?RAEmployee-ofOwner
+  :in
+  $
+  [?user ...]
+  :where
+  [?user :app/uuid ?G__33023]
+  [(= ?G__33024 ?G__33023)]
+  [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+  [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]} 
+   ...
+  "
+  [entities-by-name scoping-defintion tags push?]
+  (scoping/get-scoping-queries entities-by-name scoping-defintion tags  push?))
+
 
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name, the parsed EDN of rules (scoping-defintion) and a bool push?.
