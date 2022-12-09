@@ -341,15 +341,24 @@
          (into {}))))
 
 (defn scope-selected-tags
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, and a set of desired tags.
+  "Takes: snapshot
+   a snapshot, 
+   a user object from DB,
+   entities-by-name, parsed (and validated) EDN of scoping rules, 
+   a set of desired tags, 
+   execute? which determines if queries created will be executed,
+   and push? which seerves purpose beyond my knowledge.
    It is advised to calculacte scoping sets once and pass the result.
   A typical invocation looks like this: 
   (scope (d/db db/conn) user entities-by-name validated-scope scoping-sets :RARestaurant.ofOwner)))
 
-  Returns a map with db ids, something like:
+  if execute? == true returns:
+   a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
+   otherwise:
+   
   "
-  [config snapshot user entities-by-name scoping-defintion tags push?]
+  [config snapshot user entities-by-name scoping-defintion tags execute? push?]
   (let [relevant-rules (->> scoping-defintion
                             (filter (fn [[_ description]]
                                       (and (:constraint description)
@@ -368,9 +377,13 @@
                  relevant-rules
                  {:user {:dependencies #{} :rules []}})
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
-    (->> filtered-queries
-         (pmap (fn [x] (apply (partial execute-query config) x)))
-         (into {}))))
+    (if execute?
+      (->> filtered-queries
+           (pmap (fn [x] (apply (partial execute-query config) x)))
+           (into {}))
+      (->> filtered-queries
+           (map (fn [[tag query]] [tag (first query)]))
+           (into {})))))
 
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.

@@ -73,8 +73,8 @@
   Returns a map with db ids, something like:
   {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config snapshot user entities-by-name scoping-defintion tags push?]
-  (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags push?))
+  [config snapshot user entities-by-name scoping-defintion tags execute? push?]
+  (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags execute? push?))
 
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name, the parsed EDN of rules (scoping-defintion) and a bool push?.
