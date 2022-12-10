@@ -365,7 +365,7 @@
    a user object from DB,
    entities-by-name, 
    parsed (and validated) EDN of scoping rules,
-   scoping-sets, tree which is a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
+   scoping-sets, a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
    tags, set of desired tags.
    
    It is advised to calculacte scoping sets once and pass the result.
