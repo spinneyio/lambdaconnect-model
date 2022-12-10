@@ -391,14 +391,16 @@
          (pmap (fn [x] (apply (partial execute-query config) x)))
          (into {}))))
 
-(defn scope-selected-tags
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
-  A typical invocation looks like this: 
-  (scope-selected-tags config (d/db db/conn) user entities-by-name scoping-defintion desired-tags false)))
+(defn scope
+  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules, push? and optional set of tags to scope.
+   If set of tags to scope is not provided all tags are scoped.
+   A typical invocation looks like this: 
+  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
+
   Returns a map with db ids, something like:
-  {:RAOwner.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion tags push?]
+  {:NOUser.me #{11122, 1222} :user #{2312312}}
+  " 
+  ([config snapshot user entities-by-name scoping-defintion push? tags]
   (let [queries (get-scoping-queries entities-by-name scoping-defintion push? {:tags tags})
         completed-queries (->> queries
                                       (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
@@ -406,24 +408,7 @@
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) completed-queries))]
     (->> filtered-queries
          (pmap (fn [x] (apply (partial execute-query config) x)))
-         (into {}))))
-
-(defn scope
-  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.
-  A typical invocation looks like this: 
-  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
-
-  Returns a map with db ids, something like:
-  {:NOUser.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion push?]
-  (let [queries (get-scoping-queries entities-by-name scoping-defintion push?)
-        completed-queries (->> queries
-                                      (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
-                                      (into {}))] 
-    (->> completed-queries
-         (pmap #(apply (partial execute-query config) %))
-         (into {}))))
+         (into {})))))
 
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"

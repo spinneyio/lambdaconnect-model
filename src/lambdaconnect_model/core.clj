@@ -90,7 +90,7 @@
    a user object from DB,
    entities-by-name, 
    parsed (and validated) EDN of scoping rules,
-   scoping-sets, tree which is a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
+   scoping-sets, a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
    tags, set of desired tags.
    
    It is advised to calculacte scoping sets once and pass the result.
@@ -103,26 +103,20 @@
   [config snapshot user entities-by-name scoping-defintion scoping-sets tags]
   (scoping/scope-selected-tags-with-tree config snapshot user entities-by-name scoping-defintion scoping-sets tags))
 
-(defn scope-selected-tags
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
-  A typical invocation looks like this: 
-  (scope-selected-tags config (d/db db/conn) user entities-by-name scoping-defintion desired-tags false)))
-  Returns a map with db ids, something like:
-  {:RAOwner.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion tags push?]
-  (scoping/scope-selected-tags config snapshot user entities-by-name scoping-defintion tags push?))
-
 (defn scope
-  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.
-  A typical invocation looks like this: 
+  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules, push? and optional set of tags to scope.
+   If set of tags to scope is not provided all tags are scoped.
+   A typical invocation looks like this: 
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
+   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion push?]
-  (scoping/scope config snapshot user entities-by-name scoping-defintion push?))
+  " 
+  ([config snapshot user entities-by-name scoping-defintion push?]
+  (scoping/scope config snapshot user entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
+  ([config snapshot user entities-by-name scoping-defintion push? tags]
+  (scoping/scope config snapshot user entities-by-name scoping-defintion push? tags)))
 
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
