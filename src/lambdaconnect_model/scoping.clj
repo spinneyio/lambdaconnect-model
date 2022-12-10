@@ -6,7 +6,9 @@
             [lambdaconnect-model.utils :refer [relevant-tags]]
             [lambdaconnect-model.spec :as spec]
             [clojure.string :as str]
-            [lambdaconnect-model.tools :as t]))
+            [lambdaconnect-model.tools :as t]
+            [clojure.pprint :as pprint]
+            [clojure.set :as set]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
 
@@ -132,11 +134,11 @@
 
 
 (defn- query-for-rule
-  [snapshot
+  [
    entities-by-name
    tag
    rule
-   applied-tags ; { tag #{id1, id2, id3, ...}, ...}
+   
    applied-queries ; { tag {:dependencies #{:NOUser.me :NOMessage.sent} :rules [[?user :app/uuid ?m] [...]]}}
    ]
   (let [get-entity (fn [tag] (when tag (get entities-by-name (first (str/split (or (namespace tag) (name tag)) #"\.")))))
@@ -270,13 +272,12 @@
             additional-rules (reverse (dependent-rules dependencies))
             full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol})) ;(concat additional-rules rules)
             ]
-        [(vec (concat [`[:find ~entity-symbol :in ~'$ [~'?user ...] :where ~@full-rules] snapshot (:user applied-tags)]))
+        [`[:find ~entity-symbol :in ~'$ [~'?user ...] :where ~@full-rules]
          rules
          dependencies]))))
 
 (defn- scoping-step
-  [snapshot
-   user
+  [
    entities-by-name
    applied-queries ; { tag query, ...}
    complete-tags ; #{ tag1 tag2 ... }
@@ -287,19 +288,15 @@
     applied-queries
     (let [tag (first (filter #(subset? (relevant-tags (% remaining-edn-rules)) complete-tags) (keys remaining-edn-rules)))]
       (assert tag (str "Unable to filfill rule: " tag " - " (tag remaining-edn-rules)))
-      (let [[query rules dependencies] (query-for-rule
-                                        snapshot
+      (let [[query rules dependencies] (query-for-rule 
                                         entities-by-name
                                         tag
-                                        (tag remaining-edn-rules)
-                                        {:user user}
+                                        (tag remaining-edn-rules) 
                                         applied-wheres)]
         ; (println "Q---------------- QUERY " tag " ---------")
         ; (println query)
 
-        (recur snapshot
-               user
-               entities-by-name
+        (recur entities-by-name
                (assoc applied-queries tag query)
                (conj complete-tags tag)
                (dissoc remaining-edn-rules tag)
@@ -310,68 +307,14 @@
 ;                              INTERFACE
 ; ========================================================================================
 
-(defn scope-selected-tags-with-tree
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, map of sets indiacting which tags must be scoped per tag and a set of desired tags.
-   It is advised to calculacte scoping sets once and pass the result.
-  A typical invocation looks like this: 
-  (scope-selected-tags-with-tree config (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
-
-  Returns a map with db ids, something like:
-  {:RAOwner.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion tag-scope tags]
-  (let [relevant-rules (->> tags
-                            (map (fn [tag]
-                                   (->> scoping-defintion
-                                        (filter (fn [[k _]] (contains? (tag tag-scope) k)))
-                                        (map (fn [[tag description]] [tag (:constraint description)]))
-                                        (into {}))))
-                            (reduce merge))
-        queries (scoping-step
-                 snapshot
-                 #{(:db/id user)}
-                 entities-by-name
-                 {}
-                 #{:user}
-                 relevant-rules
-                 {:user {:dependencies #{} :rules []}})
-        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
-    (->> filtered-queries
-         (pmap (fn [x] (apply (partial execute-query config) x)))
-         (into {}))))
-
-(defn scope-selected-tags
-  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
-  A typical invocation looks like this: 
-  (scope-selected-tags config (d/db db/conn) user entities-by-name validated-scope desired-tags #{:RARestaurant.ofOwner})))
-  Returns a map with db ids, something like:
-  {:RAOwner.me #{11122, 1222} :user #{2312312}}
-  "
-  [config snapshot user entities-by-name scoping-defintion tags push?]
-  (let [relevant-rules (->> scoping-defintion
-                            (filter (fn [[_ description]]
-                                      (and (:constraint description)
-                                           (or (not push?)
-                                               (-> description :permissions :create)
-                                               (-> description :permissions :modify)
-                                               (-> description :permissions :include-in-push)))))
-                            (map (fn [[tag description]] [tag (:constraint description)]))
-                            (into {}))
-        queries (scoping-step
-                 snapshot
-                 #{(:db/id user)}
-                 entities-by-name
-                 {}
-                 #{:user}
-                 relevant-rules
-                 {:user {:dependencies #{} :rules []}})
-        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
-    (->> filtered-queries
-         (pmap (fn [x] (apply (partial execute-query config) x)))
-         (into {}))))
-
 (defn get-scoping-queries
-  "Takes entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
+  "Takes entities-by-name, 
+   parsed (and validated) EDN of scoping rules, 
+   push?
+   cconfig map, with optional keys:
+    - tags, a set of tags which queries are requested (if not provided all tags are taken by default)
+    - necessary-tags, a set of tags which are required for scoping selected tags, calculated with tree obtained from scope_dependeny/get-minimum-scoping-sets
+      if not provided queries for all tags will be calculated and result will be filtered according to tags param
    A typical invocation looks like this: 
    (get-scoping-queries entities-by-name validated-scope desired-tags #{:RARestaurant.ofEmployee :RARestaurant.ofOwner})))
    Returns a map with tags and queries generated to obtain entities for indicated user:
@@ -388,30 +331,77 @@
   [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]}
    ...
   "
-  [entities-by-name scoping-defintion tags push?]
-  (let [user {:db/id 1111111}
-        snapshot {}
+  ([entities-by-name scoping-defintion push?]
+   (get-scoping-queries entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
+  
+  ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}]
+  (let [tags (if-not tags (set (keys scoping-defintion)) tags)
+        necessary-tags (if-not necessary-tags (set (keys scoping-defintion)) necessary-tags)
         relevant-rules (->> scoping-defintion
-                            (filter (fn [[_ description]]
+                            (filter (fn [[tag description]]
                                       (and (:constraint description)
                                            (or (not push?)
                                                (-> description :permissions :create)
                                                (-> description :permissions :modify)
-                                               (-> description :permissions :include-in-push)))))
+                                               (-> description :permissions :include-in-push))
+                                           (contains? necessary-tags tag))))
                             (map (fn [[tag description]] [tag (:constraint description)]))
                             (into {}))
-        queries (scoping-step
-                 snapshot
-                 #{(:db/id user)}
+        queries (scoping-step 
                  entities-by-name
                  {}
                  #{:user}
                  relevant-rules
                  {:user {:dependencies #{} :rules []}})
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
+    filtered-queries)))
+
+(defn scope-selected-tags-with-tree
+  "Takes a snapshot, 
+   a user object from DB,
+   entities-by-name, 
+   parsed (and validated) EDN of scoping rules,
+   scoping-sets, tree which is a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
+   tags, set of desired tags.
+   It is advised to calculacte scoping sets once and pass the result.
+  A typical invocation looks like this: 
+  (scope-selected-tags-with-tree config (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
+
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config snapshot user entities-by-name scoping-defintion scoping-sets tags]
+  (let [necessary-tags (->> tags
+                            (map (fn [tag] 
+                                   (let [all-tags (keys scoping-defintion)]
+                                     (->> all-tags
+                                          (filter #(contains? (tag scoping-sets) %) )
+                                          set))))
+                            (reduce clojure.set/union)) 
+        queries (get-scoping-queries entities-by-name scoping-defintion false {:tags tags :necessary-tags necessary-tags}) 
+        completed-queries (->> queries
+                                      (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
+                                      (into {}))]
+    (->> completed-queries
+         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (into {}))))
+
+(defn scope-selected-tags
+  "Takes a snapshot, a user object from DB, entities-by-name, parsed (and validated) EDN of scoping rules, a set of desired tags and push?.
+  A typical invocation looks like this: 
+  (scope-selected-tags config (d/db db/conn) user entities-by-name validated-scope desired-tags false)))
+  Returns a map with db ids, something like:
+  {:RAOwner.me #{11122, 1222} :user #{2312312}}
+  "
+  [config snapshot user entities-by-name scoping-defintion tags push?]
+  (let [queries (get-scoping-queries entities-by-name scoping-defintion push? {:tags tags})
+        completed-queries (->> queries
+                                      (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
+                                      (into {}))
+        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) completed-queries))]
     (->> filtered-queries
-           (map (fn [[tag query]] [tag (first query)]))
-           (into {}))))
+         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (into {}))))
 
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules and push?.
@@ -422,24 +412,13 @@
   {:NOUser.me #{11122, 1222} :user #{2312312}}
   "
   [config snapshot user entities-by-name scoping-defintion push?]
-  (let [relevant-rules (->> scoping-defintion
-                            (filter (fn [[_ description]]
-                                      (and (:constraint description)
-                                           (or (not push?)
-                                               (-> description :permissions :create)
-                                               (-> description :permissions :modify)
-                                               (-> description :permissions :include-in-push)))))
-                            (map (fn [[tag description]] [tag (:constraint description)]))
-                            (into {}))]
-    (into {} (pmap #(apply (partial execute-query config) %)
-                   (scoping-step
-                    snapshot
-                    #{(:db/id user)}
-                    entities-by-name
-                    {}
-                    #{:user}
-                    relevant-rules
-                    {:user {:dependencies #{} :rules []}})))))
+  (let [queries (get-scoping-queries entities-by-name scoping-defintion push?)
+        completed-queries (->> queries
+                                      (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
+                                      (into {}))] 
+    (->> completed-queries
+         (pmap #(apply (partial execute-query config) %))
+         (into {}))))
 
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
