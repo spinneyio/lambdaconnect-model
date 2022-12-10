@@ -1,9 +1,21 @@
-(ns lambdaconnect-model.scope-single-tag
+(ns lambdaconnect-model.scope-dependency
   (:require [clojure.edn] 
             [clojure.set :as set]
             [lambdaconnect-model.utils :refer [relevant-tags]]))
 
-(defn- build-dependency-tree
+(defn- DFS
+  [cur-tag out visited call-stack] 
+  (let [cur-visited (conj visited cur-tag)
+        cur-call-stack (conj call-stack cur-tag)
+        children-paths (for [child (cur-tag out)] 
+                         (if (not (contains? cur-visited child))
+                           (DFS child out cur-visited cur-call-stack)
+                           (when (contains? call-stack child)
+                             (throw (Exception. (str "Cycle deteced, back edge from: " cur-tag " to: " child))))))] 
+    (reduce (fn [cur-paths new-path] (merge-with set/union cur-paths new-path))
+            {cur-tag call-stack} children-paths)))
+
+(defn build-dependency-tree
   "Reads scoping and builds tree which describes dependency between tags
    each edge represents a dependency: 
    if tag B has ingoing edge from tag A it means that tag A is present in tag's B contraint
@@ -27,18 +39,6 @@
                                     [updated-in updated-out updated-roots]))
                                 [empty-edge-map empty-edge-map #{}] scoping)]
     dependency-tree))
-
-(defn- DFS
-  [cur-tag out visited call-stack] 
-  (let [cur-visited (conj visited cur-tag)
-        cur-call-stack (conj call-stack cur-tag)
-        children-paths (for [child (cur-tag out)] 
-                         (if (not (contains? cur-visited child))
-                           (DFS child out cur-visited cur-call-stack)
-                           (when (contains? call-stack child)
-                             (throw (Exception. (str "Cycle deteced, back edge from: " cur-tag " to: " child))))))] 
-    (reduce (fn [cur-paths new-path] (merge-with set/union cur-paths new-path))
-            {cur-tag call-stack} children-paths)))
 
 (defn get-minimum-scoping-sets
   "Given a validated scoping
