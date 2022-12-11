@@ -108,7 +108,7 @@
    If set of tags to scope is not provided all tags are scoped.
    A typical invocation looks like this: 
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
-   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
+  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}

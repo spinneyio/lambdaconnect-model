@@ -396,12 +396,16 @@
    If set of tags to scope is not provided all tags are scoped.
    A typical invocation looks like this: 
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
+  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
   " 
+  ([config snapshot user entities-by-name scoping-defintion push?]
+   (scope config snapshot user entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
+  
   ([config snapshot user entities-by-name scoping-defintion push? tags]
-  (let [queries (get-scoping-queries entities-by-name scoping-defintion push? {:tags tags})
+  (let [queries (get-scoping-queries entities-by-name scoping-defintion push? tags)
         completed-queries (->> queries
                                       (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
                                       (into {}))
