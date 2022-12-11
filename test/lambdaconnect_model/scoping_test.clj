@@ -1,10 +1,9 @@
 (ns lambdaconnect-model.scoping-test
   (:require [clojure.test :refer [deftest is testing]] 
             [lambdaconnect-model.core :as mp] 
+            [clojure.math.combinatorics :as combinatorics]
             [clojure.pprint :as pprint :refer [pprint]])
-  (:import java.util.regex.Pattern)
-  ;(:import java.io.File)
-  )
+  (:import java.util.regex.Pattern))
   
 
 (def entities-by-name-example (mp/entities-by-name "resources/test/test_model.xml"))
@@ -18,12 +17,10 @@
         (let [comapre-db-link (fn [actual-links]
                                 (let [gensym-regex #"\?G__[0-9]{1,10}"
                                       expected-links [(Pattern/compile (str "\\[\\?user :app/uuid " gensym-regex "\\]"))
-                                                      (Pattern/compile (str "\\[\\(= " gensym-regex " " gensym-regex"\\)\\]"))
+                                                      (Pattern/compile (str "\\[\\(= " gensym-regex " " gensym-regex "\\)\\]"))
                                                       (Pattern/compile (str "\\[\\?LAUser\\-me :LAUser/internalUserId " gensym-regex "\\]"))]]
                                   (is (= 3 (count actual-links)) "unexpected number of actual-links was given!")
-                                  (doseq [idx (range 3)]
-                                    (when (not (boolean (re-matches (get expected-links idx) (str (get actual-links idx)))))(println "EXPECTED: " (get expected-links idx))
-                                    (println  "ACTUAL: "(str (get actual-links idx))))
+                                  (doseq [idx (range 3)] 
                                     (is (boolean (re-matches (get expected-links idx) (str (get actual-links idx))))))))
               
               compare-query (fn [actual expected]
@@ -46,8 +43,7 @@
                                 ;(println "expected-where" expected-where)
                                 (is (= actual-where expected-where))
                                 (testing "links to db"
-                                  (comapre-db-link actual-links)
-                                  )))
+                                  (comapre-db-link actual-links))))
               queries (mp/get-scoping-queries entities-by-name-example scoping-example false)
               expected-queries {:LAUser.me '[:find
                                              ?LAUser-me
@@ -108,4 +104,13 @@
               (is (contains? queries tag))))
           (testing "query equality"
             (doseq [[tag query] [(first queries)]]
-              (compare-query query (tag expected-queries))))))
+              (compare-query query (tag expected-queries))))
+         (testing "get selected tags"
+           (let [all-subsets (->> (set (keys scoping-example))
+                                      (combinatorics/subsets)
+                                      (remove empty?)
+                                      (map set)
+                                      (set))]
+             (doseq [subset all-subsets]
+               (let [queries (mp/get-scoping-queries entities-by-name-example scoping-example false {:tags subset})]
+                 (is (= (set (keys queries)) subset))))))))

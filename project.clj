@@ -6,8 +6,9 @@
   :dependencies [[org.clojure/clojure "1.10.3"]
                  [org.clojure/algo.generic "0.1.3"]
                  [org.clojure/data.json "1.0.0"]
-                 [org.clojure/test.check "1.1.1"]
-                 [clj-time "0.15.2"]
+                 [org.clojure/test.check "1.1.1"] 
+                 [org.clojure/math.combinatorics "0.0.7"]
+                 [clj-time "0.15.2"] 
                  [com.taoensso/tufte "2.3.0"]]
   :main ^:skip-aot lambdaconnect-model.core
   :target-path "target/%s"
