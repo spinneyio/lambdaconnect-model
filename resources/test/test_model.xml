@@ -57,7 +57,7 @@
         <attribute name="anthemTitle" attributeType="String" maxValueString="36" syncable="YES"/>
         <relationship name="players" maxCount="1" deletionRule="Nullify" destinationEntity="LAUser" inverseName="playsFor" inverseEntity="LAUser" syncable="YES"/>
         <relationship name="tickests" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LATeam" inverseName="ticketsSold" inverseEntity="LATeam"/>
-        <relationship name="playedIn" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LAGame" inverseName="playedIn" inverseEntity="LAGame" syncable="YES"/>
+        <relationship name="playedIn" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LAGame" inverseName="teamsPlayed" inverseEntity="LAGame" syncable="YES"/>
     </entity>
     <entity name="LATicketsSold" representedClassName=".LATicketsSold" syncable="YES">
         <attribute name="active" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="NO" syncable="YES"/>

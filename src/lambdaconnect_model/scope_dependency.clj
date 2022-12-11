@@ -29,7 +29,6 @@
         empty-edge-map (->> tags
                             (map (fn [tag] [tag #{}]))
                             (into {})) 
-        _ (println "empty-edge-map" empty-edge-map)
         [ingoing outgoing] (reduce (fn [[in out] [tag attrs]]
                                   (let [tag-parents (relevant-tags (:constraint attrs)) 
                                         updated-in (update in tag into tag-parents)
