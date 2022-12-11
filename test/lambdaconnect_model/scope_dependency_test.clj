@@ -7,12 +7,12 @@
             [clojure.spec.gen.alpha :as gen]
             [clojure.pprint :as pprint]))
 
-(def test-scoping (mp/read-pull-scoping-edn "resources/test/test_scope.edn"
+(def scoping-example (mp/read-pull-scoping-edn "resources/test/test_scope.edn"
                                                  (mp/entities-by-name "resources/test/test_model.xml")))
 
 (deftest dependency-tree
   (testing "buidling dependency tree"
-    (let [[in out roots] (scp-dep/build-dependency-tree test-scoping)
+    (let [[in out roots] (scp-dep/build-dependency-tree scoping-example)
           expected-in {:LAUser.me #{:user}
                        :LALocation.fromUser #{:LAUser.me}
                        :LAGame.organisedByUser #{:LAUser.me}
@@ -33,7 +33,7 @@
       (is (= roots expected-roots)))))
 
 (deftest minimal-scoping-sets
-  (let [scoping-sets (scp-dep/get-minimum-scoping-sets test-scoping)
+  (let [scoping-sets (scp-dep/get-minimum-scoping-sets scoping-example)
         expected-sets {:LAUser.me #{:LAUser.me}
                        :LALocation.fromUser #{:LAUser.me :LALocation.fromUser}
                        :LAGame.organisedByUser #{:LAUser.me :LAGame.organisedByUser}

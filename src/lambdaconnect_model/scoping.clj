@@ -337,27 +337,28 @@
   ([entities-by-name scoping-defintion push?]
    (get-scoping-queries entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
   
-  ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}]
-  (let [tags (if-not tags (set (keys scoping-defintion)) tags)
-        necessary-tags (if-not necessary-tags (set (keys scoping-defintion)) necessary-tags)
-        relevant-rules (->> scoping-defintion
-                            (filter (fn [[tag description]]
-                                      (and (:constraint description)
-                                           (or (not push?)
-                                               (-> description :permissions :create)
-                                               (-> description :permissions :modify)
-                                               (-> description :permissions :include-in-push))
-                                           (contains? necessary-tags tag))))
-                            (map (fn [[tag description]] [tag (:constraint description)]))
-                            (into {}))
-        queries (scoping-step 
-                 entities-by-name
-                 {}
-                 #{:user}
-                 relevant-rules
-                 {:user {:dependencies #{} :rules []}})
-        filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
-    filtered-queries)))
+  ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}] 
+   (let [tags (if-not tags (set (keys scoping-defintion)) tags)
+         necessary-tags (if-not necessary-tags (set (keys scoping-defintion)) necessary-tags) 
+         relevant-rules (->> scoping-defintion
+                             (filter (fn [[tag description]]
+                                       (and (:constraint description)
+                                            (or (not push?)
+                                                (-> description :permissions :create)
+                                                (-> description :permissions :modify)
+                                                (-> description :permissions :include-in-push))
+                                            (contains? necessary-tags tag)
+                                            )))
+                             (map (fn [[tag description]] [tag (:constraint description)]))
+                             (into {})) 
+         queries (scoping-step
+                  entities-by-name
+                  {}
+                  #{:user}
+                  relevant-rules
+                  {:user {:dependencies #{} :rules []}}) 
+         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
+     filtered-queries)))
 
 (defn scope-selected-tags-with-tree
   "Takes:
