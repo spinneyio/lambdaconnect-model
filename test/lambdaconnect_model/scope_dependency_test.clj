@@ -1,14 +1,11 @@
 (ns lambdaconnect-model.scope-dependency-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.spec.alpha :as s]
+  (:require [clojure.test :refer [deftest is testing]] 
             [lambdaconnect-model.core :as mp]
-            [lambdaconnect-model.scope-dependency :as scp-dep]
-            [clojure.data.json :refer [read-str]]
-            [clojure.spec.gen.alpha :as gen]
-            [clojure.pprint :as pprint]))
+            [lambdaconnect-model.scope-dependency :as scp-dep]))
 
-(def scoping-example (mp/read-pull-scoping-edn "resources/test/test_scope.edn"
-                                                 (mp/entities-by-name "resources/test/test_model.xml")))
+(def scoping-example (mp/read-pull-scoping-edn 
+                      "resources/test/test_scope.edn"
+                      (mp/entities-by-name "resources/test/test_model.xml")))
 
 (deftest dependency-tree
   (testing "buidling dependency tree"

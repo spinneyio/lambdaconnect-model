@@ -1,8 +1,7 @@
 (ns lambdaconnect-model.scoping-test
   (:require [clojure.test :refer [deftest is testing]] 
             [lambdaconnect-model.core :as mp] 
-            [clojure.math.combinatorics :as combinatorics]
-            [clojure.pprint :as pprint :refer [pprint]])
+            [clojure.math.combinatorics :as combinatorics])
   (:import java.util.regex.Pattern))
   
 
@@ -31,16 +30,9 @@
                                     expected-in (subvec expected 2 5)
                                     actual-where (remove-elements (subvec actual 5) 1 3)
                                     expected-where (remove-elements (subvec expected 5) 1 3)
-                                    actual-links (subvec actual 6 9) 
-                                    ]
-                                ;(println "actual-find" actual-find)
-                                ;(println "expected-find" expected-find)
-                                (is (= actual-find expected-find))
-                                ;(println "actual-in" actual-in)
-                                ;(println "expected-in" expected-in)
-                                (is (= actual-in expected-in))
-                                ;(println "actual-where" actual-where)
-                                ;(println "expected-where" expected-where)
+                                    actual-links (subvec actual 6 9)] 
+                                (is (= actual-find expected-find)) 
+                                (is (= actual-in expected-in)) 
                                 (is (= actual-where expected-where))
                                 (testing "links to db"
                                   (comapre-db-link actual-links))))
