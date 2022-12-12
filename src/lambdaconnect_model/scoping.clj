@@ -6,9 +6,7 @@
             [lambdaconnect-model.utils :refer [relevant-tags]]
             [lambdaconnect-model.spec :as spec]
             [clojure.string :as str]
-            [lambdaconnect-model.tools :as t]
-            [clojure.pprint :as pprint]
-            [clojure.set :as set]))
+            [lambdaconnect-model.tools :as t]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
 
@@ -134,11 +132,9 @@
 
 
 (defn- query-for-rule
-  [
-   entities-by-name
+  [entities-by-name
    tag
    rule
-   
    applied-queries ; { tag {:dependencies #{:NOUser.me :NOMessage.sent} :rules [[?user :app/uuid ?m] [...]]}}
    ]
   (let [get-entity (fn [tag] (when tag (get entities-by-name (first (str/split (or (namespace tag) (name tag)) #"\.")))))

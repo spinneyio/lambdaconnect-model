@@ -10,9 +10,9 @@
                           :permissions {:modify true
                                         :create false}}
  :LATicketsSold.byUserEvent {:constraint (and [contains? :location :LALocation.fromUser]
-                                           [contains? :game :LAGame.organisedByUser])
-                          :permissions {:modify true
-                                        :create false}} 
+                                              [contains? :game :LAGame.organisedByUser])
+                             :permissions {:modify true
+                                           :create false}} 
  :LATeam.playedInGame {:constraint [contains? :playedIn :LAGame.organisedByUser]
                        :permissions {:modify true
                                      :create false}}

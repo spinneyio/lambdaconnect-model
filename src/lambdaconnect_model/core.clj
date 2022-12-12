@@ -45,7 +45,7 @@
   [path entities-by-name]
   (scoping/read-pull-scoping-edn path entities-by-name))
 
-(defn get-minim-scoping-sets 
+(defn get-minimum-scoping-sets 
   "Given a validated scoping
    returns map of sets which has tags as key and each set keeps
    tags required for scoping that tag"
@@ -86,6 +86,7 @@
 
 (defn scope-selected-tags-with-tree
   "Takes:
+   a config map,
    a snapshot, 
    a user object from DB,
    entities-by-name, 
@@ -104,7 +105,7 @@
   (scoping/scope-selected-tags-with-tree config snapshot user entities-by-name scoping-defintion scoping-sets tags))
 
 (defn scope
-  "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules, push? and optional set of tags to scope.
+  "Takes a config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules, push? and optional set of tags to scope.
    If set of tags to scope is not provided all tags are scoped.
    A typical invocation looks like this: 
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
