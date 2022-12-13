@@ -18,11 +18,11 @@
 (defn build-dependency-tree
   "Reads scoping and builds tree which describes dependency between tags
    each edge represents a dependency: 
-   if tag B has ingoing edge from tag A it means that tag A is present in tag's B contraint
-   if tag A has outgoing edge to B it means that tag B has tag A in its contraints
+   if tag B has ingoing edge from tag A it means that tag A is present in tag's B constraint
+   if tag A has outgoing edge to B it means that tag B has tag A in its constraints
    {tagB {:constraints [= :field tagA]}} <=> A -> B
    edges are represent as map of sets: tag #{set of in/out going edges}, roots are stored in set
-   returns a tuple [ingoing edges, outgoing edges, roots (where root is a tag with :user/uuid in its contraints)]" 
+   returns a tuple [ingoing edges, outgoing edges, roots (where root is a tag with :user/uuid in its constraints)]" 
   [scoping]
   (let [root-tag :user
         tags (conj (keys scoping) root-tag)
@@ -48,11 +48,11 @@
         paths (for [root roots]
                 (DFS root out #{} #{}))
         conjoined-paths (->> paths
-                             (reduce (fn [cur-paths new-path] (merge cur-paths new-path)))
+                             (apply merge)
                              (map (fn [[tag path]] [tag (conj path tag)]))
                              (into {}))
         ;DFS skips those tags as they are neither root nor they have any edges in (so they are detached from the tree), 
-        ;only known case when such tag can occur is when tag uses :all contraint
+        ;only known case when such tag can occur is when tag uses :all constraint
         missing-tags (set/difference (set (keys scoping)) (set (keys conjoined-paths)))
         completed-paths (reduce (fn [scoping-paths missing-tag]
                                   (assert (= :all (get-in scoping [missing-tag :constraint]))

@@ -331,7 +331,7 @@
    ...
   "
   ([entities-by-name scoping-defintion push?]
-   (get-scoping-queries entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
+   (get-scoping-queries entities-by-name scoping-defintion push? nil))
   
   ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}]
    (let [tags (if-not tags (set (keys scoping-defintion)) tags)

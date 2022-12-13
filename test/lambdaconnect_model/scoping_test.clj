@@ -1,8 +1,7 @@
 (ns lambdaconnect-model.scoping-test
   (:require [clojure.test :refer [deftest is testing]] 
             [lambdaconnect-model.core :as mp] 
-            [clojure.math.combinatorics :as combinatorics])
-  (:import java.util.regex.Pattern))
+            [clojure.math.combinatorics :as combinatorics]))
   
 
 (def entities-by-name-example (mp/entities-by-name "resources/test/test_model.xml"))
@@ -15,9 +14,9 @@
       
         (let [comapre-db-link (fn [actual-links]
                                 (let [gensym-regex #"\?G__[0-9]{1,10}"
-                                      expected-links [(Pattern/compile (str "\\[\\?user :app/uuid " gensym-regex "\\]"))
-                                                      (Pattern/compile (str "\\[\\(= " gensym-regex " " gensym-regex "\\)\\]"))
-                                                      (Pattern/compile (str "\\[\\?LAUser\\-me :LAUser/internalUserId " gensym-regex "\\]"))]]
+                                      expected-links [(re-pattern (str "\\[\\?user :app/uuid " gensym-regex "\\]"))
+                                                      (re-pattern (str "\\[\\(= " gensym-regex " " gensym-regex "\\)\\]"))
+                                                      (re-pattern (str "\\[\\?LAUser\\-me :LAUser/internalUserId " gensym-regex "\\]"))]]
                                   (is (= 3 (count actual-links)) "unexpected number of actual-links was given!")
                                   (doseq [idx (range 3)] 
                                     (is (boolean (re-matches (get expected-links idx) (str (get actual-links idx))))))))
