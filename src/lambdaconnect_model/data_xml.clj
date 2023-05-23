@@ -3,8 +3,7 @@
             [clojure.algo.generic.functor :refer [fmap]]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
-            [lambdaconnect-model.tools :as t]
-            [lambdaconnect-model.data-xml :as xml]))
+            [lambdaconnect-model.tools :as t]))
 
 (defn regex? [r] (instance? java.util.regex.Pattern r))
 
