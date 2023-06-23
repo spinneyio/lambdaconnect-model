@@ -283,7 +283,7 @@
   (if (empty? remaining-edn-rules)
     applied-queries
     (let [tag (first (filter #(subset? (relevant-tags (% remaining-edn-rules)) complete-tags) (keys remaining-edn-rules)))]
-      (assert tag (str "Unable to filfill rule: " tag " - " remaining-edn-rules))
+      (assert tag (str "Unable to fulfill rule! Tag: '" tag "', remaining rules: '" remaining-edn-rules "', complete tags: '" complete-tags "'"))
       (let [[query rules dependencies] (query-for-rule 
                                         entities-by-name
                                         tag
