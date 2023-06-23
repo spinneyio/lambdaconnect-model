@@ -283,7 +283,7 @@
   (if (empty? remaining-edn-rules)
     applied-queries
     (let [tag (first (filter #(subset? (relevant-tags (% remaining-edn-rules)) complete-tags) (keys remaining-edn-rules)))]
-      (assert tag (str "Unable to find the next rule! Remaining rules: '" remaining-edn-rules "', complete tags: '" complete-tags "'"))
+      (assert tag (str "Unable to find the next rule! Remaining rules: \n'" (with-out-str (pprint remaining-edn-rules)) "'*****, complete tags: \n'" (with-out-str (pprint complete-tags)) "'"))
       (let [[query rules dependencies] (query-for-rule 
                                         entities-by-name
                                         tag
