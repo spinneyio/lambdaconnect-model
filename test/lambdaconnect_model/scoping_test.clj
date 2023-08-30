@@ -1,8 +1,10 @@
 (ns lambdaconnect-model.scoping-test
-  (:require [clojure.test :refer [deftest is testing]] 
-            [lambdaconnect-model.core :as mp] 
-            [clojure.math.combinatorics :as combinatorics]))
-  
+  (:require [clojure.test :refer [deftest is testing]]
+            [lambdaconnect-model.core :as mp]
+            [clojure.math.combinatorics :as combinatorics]
+            [clojure.walk :refer [postwalk]]
+            [clojure.string :as str]))
+
 
 (def entities-by-name-example (mp/entities-by-name "resources/test/test_model.xml"))
 
@@ -10,31 +12,23 @@
 
 
 
-(deftest query-geneartor-test
-      
-        (let [comapre-db-link (fn [actual-links]
-                                (let [gensym-regex #"\?G__[0-9]{1,10}"
-                                      expected-links [(re-pattern (str "\\[\\?user :app/uuid " gensym-regex "\\]"))
-                                                      (re-pattern (str "\\[\\(= " gensym-regex " " gensym-regex "\\)\\]"))
-                                                      (re-pattern (str "\\[\\?LAUser\\-me :LAUser/internalUserId " gensym-regex "\\]"))]]
-                                  (is (= 3 (count actual-links)) "unexpected number of actual-links was given!")
-                                  (doseq [idx (range 3)] 
-                                    (is (boolean (re-matches (get expected-links idx) (str (get actual-links idx))))))))
-              
+(deftest query-generator-test
+
+        (let [remap-query-syms (fn [syms-seq query]
+                                 (let [syms-map (atom {})]
+                                   (postwalk (fn [x]
+                                               (if (and (symbol? x)
+                                                        (str/starts-with? (name x) "?G__"))
+                                                 (or (get @syms-map x)
+                                                     (let [new-sym (nth syms-seq (count @syms-map))]
+                                                       (swap! syms-map assoc x new-sym)
+                                                       new-sym))
+                                                 x))
+                                             query)))
               compare-query (fn [actual expected]
-                              (let [remove-elements (fn [vctr idx element-count] (into (subvec vctr 0 idx) (subvec vctr (min (count vctr) (+ idx element-count)))))
-                                    actual-find (subvec actual 0 2)
-                                    expected-find (subvec expected 0 2)
-                                    actual-in (subvec actual 2 5)
-                                    expected-in (subvec expected 2 5)
-                                    actual-where (remove-elements (subvec actual 5) 1 3)
-                                    expected-where (remove-elements (subvec expected 5) 1 3)
-                                    actual-links (subvec actual 6 9)] 
-                                (is (= actual-find expected-find)) 
-                                (is (= actual-in expected-in)) 
-                                (is (= actual-where expected-where))
-                                (testing "links to db"
-                                  (comapre-db-link actual-links))))
+                              (let [syms (repeatedly #(gensym "?G__"))]
+                                (is (= (remap-query-syms syms expected)
+                                       (remap-query-syms syms actual)))))
               queries (mp/get-scoping-queries entities-by-name-example scoping-example false)
               expected-queries {:LAUser.me '[:find
                                              ?LAUser-me
@@ -43,8 +37,7 @@
                                              [?user ...]
                                              :where
                                              [?user :app/uuid ?G__28253]
-                                             [(= ?G__28254 ?G__28253)]
-                                             [?LAUser-me :LAUser/internalUserId ?G__28254]]
+                                             [?LAUser-me :LAUser/internalUserId ?G__28253]]
                                 :LALocation.fromUser '[:find
                                                        ?LALocation-fromUser
                                                        :in
@@ -52,8 +45,7 @@
                                                        [?user ...]
                                                        :where
                                                        [?user :app/uuid ?G__28253]
-                                                       [(= ?G__28254 ?G__28253)]
-                                                       [?LAUser-me :LAUser/internalUserId ?G__28254]
+                                                       [?LAUser-me :LAUser/internalUserId ?G__28253]
                                                        [?LAUser-me :LAUser/address ?LALocation-fromUser]]
                                 :LAGame.organisedByUser '[:find
                                                           ?LAGame-organisedByUser
@@ -61,10 +53,11 @@
                                                           $
                                                           [?user ...]
                                                           :where
-                                                          [?user :app/uuid ?G__28253]
-                                                          [(= ?G__28254 ?G__28253)]
-                                                          [?LAUser-me :LAUser/internalUserId ?G__28254]
-                                                          [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]]
+                                                          (or-join [?user ?LAGame-organisedByUser]
+                                                                   [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                   (and [?user :app/uuid ?G__8937]
+                                                                        [?LAUser-me :LAUser/internalUserId ?G__8937]
+                                                                        [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]))]
                                 :LATicketsSold.byUserEvent '[:find
                                                              ?LATicketsSold-byUserEvent
                                                              :in
@@ -72,11 +65,14 @@
                                                              [?user ...]
                                                              :where
                                                              [?user :app/uuid ?G__28253]
-                                                             [(= ?G__28254 ?G__28253)]
-                                                             [?LAUser-me :LAUser/internalUserId ?G__28254]
-                                                             [?LAUser-me :LAUser/address ?LALocation-fromUser]
-                                                             [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]
+                                                             [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                             (or-join [?user ?LAGame-organisedByUser]
+                                                                      [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                      (and [?user :app/uuid ?G__28253]
+                                                                           [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                                           [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]))
                                                              [?LATicketsSold-byUserEvent :LATicketsSold/game ?LAGame-organisedByUser]
+                                                             [?LAUser-me :LAUser/address ?LALocation-fromUser]
                                                              [?LATicketsSold-byUserEvent :LATicketsSold/location ?LALocation-fromUser]]
                                 :LATeam.playedInGame '[:find
                                                        ?LATeam-playedInGame
@@ -84,24 +80,31 @@
                                                        $
                                                        [?user ...]
                                                        :where
-                                                       [?user :app/uuid ?G__28253]
-                                                       [(= ?G__28254 ?G__28253)]
-                                                       [?LAUser-me :LAUser/internalUserId ?G__28254]
-                                                       [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]
+                                                       (or-join [?user ?LAGame-organisedByUser]
+                                                                [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                (and [?user :app/uuid ?G__8960]
+                                                                     [?LAUser-me :LAUser/internalUserId ?G__8960]
+                                                                     [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]))
                                                        [?LATeam-playedInGame :LATeam/playedIn ?LAGame-organisedByUser]]
-                                :LASyncInfo.system '[:find ?LASyncInfo-system :in $ [?user ...] :where [?LASyncInfo-system :LASyncInfo/ident__]]}]
+                                :LASyncInfo.system '[:find ?LASyncInfo-system :in $ [?user ...] :where [?LASyncInfo-system :LASyncInfo/ident__]]
+                                :LACnysInfo.system '[:find ?LACnysInfo-system
+                                                     :in $ [?user ...]
+                                                     :where
+                                                     [?LACnysInfo-system :LACnysInfo/ident__]
+                                                     [(identity ?LACnysInfo-system) ?G__8960]
+                                                     [(!= ?LACnysInfo-system ?G__8960)]]}]
           (testing "all queries expected present"
             (doseq [[tag _] expected-queries]
               (is (contains? queries tag))))
           (testing "query equality"
-            (doseq [[tag query] [(first queries)]]
+            (doseq [[tag query] queries]
               (compare-query query (tag expected-queries))))
          (testing "get selected tags"
            (let [all-subsets (->> (set (keys scoping-example))
-                                      (combinatorics/subsets)
-                                      (remove empty?)
-                                      (map set)
-                                      (set))]
+                                  (combinatorics/subsets)
+                                  (remove empty?)
+                                  (map set)
+                                  (set))]
              (doseq [subset all-subsets]
                (let [queries (mp/get-scoping-queries entities-by-name-example scoping-example false {:tags subset})]
                  (is (= (set (keys queries)) subset))))))))

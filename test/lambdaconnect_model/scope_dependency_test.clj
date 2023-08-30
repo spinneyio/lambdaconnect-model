@@ -1,9 +1,9 @@
 (ns lambdaconnect-model.scope-dependency-test
-  (:require [clojure.test :refer [deftest is testing]] 
+  (:require [clojure.test :refer [deftest is testing]]
             [lambdaconnect-model.core :as mp]
             [lambdaconnect-model.scope-dependency :as scp-dep]))
 
-(def scoping-example (mp/read-pull-scoping-edn 
+(def scoping-example (mp/read-pull-scoping-edn
                       "resources/test/test_scope.edn"
                       (mp/entities-by-name "resources/test/test_model.xml")))
 
@@ -16,6 +16,7 @@
                        :LASyncInfo.system #{}
                        :LATicketsSold.byUserEvent #{:LAGame.organisedByUser :LALocation.fromUser}
                        :LATeam.playedInGame #{:LAGame.organisedByUser}
+                       :LACnysInfo.system #{}
                        :user #{}}
           expected-out {:LAUser.me #{:LALocation.fromUser :LAGame.organisedByUser}
                         :LALocation.fromUser #{:LATicketsSold.byUserEvent}
@@ -23,8 +24,9 @@
                         :LATicketsSold.byUserEvent #{}
                         :LATeam.playedInGame #{}
                         :user #{:LAUser.me}
+                        :LACnysInfo.system #{}
                         :LASyncInfo.system #{}}
-          expected-roots #{:LAUser.me}] 
+          expected-roots #{:LAUser.me}]
       (is (= in expected-in))
       (is (= out expected-out))
       (is (= roots expected-roots)))))
@@ -36,5 +38,6 @@
                        :LAGame.organisedByUser #{:LAUser.me :LAGame.organisedByUser}
                        :LATicketsSold.byUserEvent #{:LALocation.fromUser :LAGame.organisedByUser :LAUser.me :LATicketsSold.byUserEvent}
                        :LATeam.playedInGame #{:LAGame.organisedByUser :LAUser.me :LATeam.playedInGame}
-                       :LASyncInfo.system #{:LASyncInfo.system}}] 
+                       :LASyncInfo.system #{:LASyncInfo.system}
+                       :LACnysInfo.system #{:LACnysInfo.system}}]
     (is (= scoping-sets expected-sets))))
