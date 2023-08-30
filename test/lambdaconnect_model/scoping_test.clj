@@ -90,9 +90,8 @@
                                 :LACnysInfo.system '[:find ?LACnysInfo-system
                                                      :in $ [?user ...]
                                                      :where
-                                                     [?LACnysInfo-system :LACnysInfo/ident__]
-                                                     [(identity ?LACnysInfo-system) ?G__8960]
-                                                     [(!= ?LACnysInfo-system ?G__8960)]]}]
+                                                     [(identity ?user) ?LACnysInfo-system]
+                                                     [(!= ?user ?LACnysInfo-system)]]}]
           (testing "all queries expected present"
             (doseq [[tag _] expected-queries]
               (is (contains? queries tag))))

@@ -60,7 +60,7 @@
                                           (and (s-matches? '?user r)
                                                (not (seq? r)))
                                           (and (keyword? (second r))
-                                               (#{"internalUserId" "ident__"} (name (second r)) ))
+                                               (= (name (second r)) "internalUserId"))
                                           (seq? (first r))))]
                           (if (and (goes-up? a)
                                    (goes-up? b))
@@ -186,12 +186,9 @@
                 :none
                 ;; Obviously falsy rule which binds output variable and USES it. Do not write [(= true false)] or sth similar,
                 ;; Datomic might optimize that query and skip falsy rule, returning all objects.
-                (let [g1 (symbol (str "?" (gensym)))
-                      symbol (symbol-for-tag tag)
-                      entity-attr (keyword (:name entity) "ident__")]
-                  [#{} `[[~symbol ~entity-attr]
-                         [(~'identity ~symbol) ~g1]
-                         [(~'!= ~symbol ~g1)]]])
+                (let [symbol (symbol-for-tag tag)]
+                  [#{} `[[(~'identity ~'?user) ~symbol]
+                         [(~'!= ~'?user ~symbol)]]])
 
                 (let [op (first rule)]
                   (if (list? rule)
