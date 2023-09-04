@@ -87,13 +87,13 @@
          :else (get-ordered-result remaining-rules))))))
 
 ; ================================================== QUERY SPLIT FOR PERFORMANCE ============================================
-; 
+;
 ; In certains scenarios the query engine takes a long long time to solve queries that have a top-level or-join
 ; In particular, if most of the queries contain the "?user" binding but one of them does not (the one that e.g. wants to have all of them but with a condition).
 ; Therefore, when we find a query that has a single "or" amongst its highest level "where" clauses, we restructure it into multiple queries and execute all of them
 
 (defn execute-query-generic [config tag query]
-;  (println "Trying to execute query: " query)  
+;  (println "Trying to execute query: " query)
   (let [res (profile/p tag (->> query (apply (:q config)) (mapv first) set))]
  ;   (println "COMPUTED:" res)
     [tag res]))
@@ -103,7 +103,7 @@
   ; [ '[:find [?LDMedia-allowedForMe ...] :in $ [?user ...]  :where ...] snapshot #{ 312932198 }]
   ;
   ; we need to extract the where part and check it for the join condition existence
-  ; 
+  ;
   (let [[v snapshot entry-set] query
         [beginning where] (split-at (.indexOf v :where) v)
         entity-symbol (first (second beginning))
@@ -149,7 +149,7 @@
                   (union dependencies (reduce union (map nested-dependencies (map #(:dependencies (% applied-queries)) dependencies))))))
 
             (dependent-rules
-              ([dependencies] ; #{:NOUser.me :NOMessage.sent ...} 
+              ([dependencies] ; #{:NOUser.me :NOMessage.sent ...}
                (dependent-rules dependencies #{:user} []))
               ([dependencies
                 resolved-dependencies ; #{:NOUser.they}
@@ -178,10 +178,17 @@
               [rule
                top-level
                ignored-dependencies]
-              (if (= :all rule)
+              (case rule
+                :all
                 (let [symbol (symbol-for-tag tag)
                       entity-attr (keyword (:name entity) "ident__")]
                   [#{} `[[~symbol ~entity-attr]]])
+                :none
+                ;; Obviously falsy rule which binds output variable and USES it. Do not write [(= true false)] or sth similar,
+                ;; Datomic might optimize that query and skip falsy rule, returning all objects.
+                (let [symbol (symbol-for-tag tag)]
+                  [#{} `[[(~'identity ~'?user) ~symbol]
+                         [(~'!= ~'?user ~symbol)]]])
 
                 (let [op (first rule)]
                   (if (list? rule)
@@ -203,7 +210,7 @@
                           ;; _ (println "USED: " used-entities)
                           ;; _ (println "INTerSeCTION: " (intersection dependent-entities-from-common used-entities))
                           ]
-                      ;; (when (or (= op 'and) (= op 'or)) 
+                      ;; (when (or (= op 'and) (= op 'or))
                       ;;   (println "=================================================================")
                       ;;   (println "")
                       ;;   (println "--------- DEBUG WHERE FOR RULE OP=" (if (= op 'and) "AND" "OR") "-------------------")
@@ -259,12 +266,23 @@
                          target-relationship (if target-datomic ; ops do not matter for datmic - contains? and = are the same
                                                `[[~target-symbol ~(t/datomic-name target-relationship) ~entity-symbol]]
                                                `[[~entity-symbol ~(t/datomic-name relationship) ~target-symbol]])
-                             ; user 
+                             ; user
                          :else
-                         `[[~target-symbol ~user-target ~g1]
-                           [~entity-symbol ~(t/datomic-name attribute) ~g2]
-                           ~@(if (= (:type attribute) :db.type/string) `[[(~'.toString ~g1) ~g3]] [])
-                           [(~op ~g2 ~(if (= (:type attribute) :db.type/string) g3 g1))]])])))))]
+                         (if (= op '=)
+                           (if (= (:type attribute) :db.type/string)
+                             `[[~target-symbol ~user-target ~g1]
+                               [[(~'.toString ~g1) ~g2]]
+                               [~entity-symbol ~(t/datomic-name attribute) ~g2]]
+                             `[[~target-symbol ~user-target ~g1]
+                               [~entity-symbol ~(t/datomic-name attribute) ~g1]])
+                           (if (= (:type attribute) :db.type/string)
+                             `[[~target-symbol ~user-target ~g1]
+                               [[(~'.toString ~g1) ~g3]]
+                               [~entity-symbol ~(t/datomic-name attribute) ~g2]
+                               [(~op ~g2 ~g3)]]
+                             `[[~target-symbol ~user-target ~g1]
+                               [~entity-symbol ~(t/datomic-name attribute) ~g2]
+                               [(~op ~g2 ~g1)]])))])))))]
       (let [[dependencies rules] (where-for-rule rule true #{})
             additional-rules (reverse (dependent-rules dependencies))
             full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol})) ;(concat additional-rules rules)
@@ -285,10 +303,10 @@
     applied-queries
     (let [tag (first (filter #(subset? (relevant-tags (% remaining-edn-rules)) complete-tags) (keys remaining-edn-rules)))]
       (assert tag (str "Unable to find the next rule! Remaining rules: \n'" (with-out-str (pprint remaining-edn-rules)) "'*****, complete tags: \n'" (with-out-str (pprint complete-tags)) "'"))
-      (let [[query rules dependencies] (query-for-rule 
+      (let [[query rules dependencies] (query-for-rule
                                         entities-by-name
                                         tag
-                                        (tag remaining-edn-rules) 
+                                        (tag remaining-edn-rules)
                                         applied-wheres)]
         ; (println "Q---------------- QUERY " tag " ---------")
         ; (println query)
@@ -306,15 +324,15 @@
 
 (defn get-scoping-queries
   "Takes:
-   entities-by-name, 
-   parsed (and validated) EDN of scoping rules, 
+   entities-by-name,
+   parsed (and validated) EDN of scoping rules,
    push?
    config map, with optional keys:
     - tags, a set of tags which queries are requested (if not provided all tags are taken by default)
     - necessary-tags, a set of tags which are required for scoping selected tags, calculated with tree obtained from scope_dependeny/get-minimum-scoping-sets
       if not provided queries for all tags will be calculated and result will be filtered according to tags param
-   
-   A typical invocation looks like this: 
+
+   A typical invocation looks like this:
    (get-scoping-queries entities-by-name validated-scope push?)))
    (get-scoping-queries entities-by-name validated-scope push? {:tags #{:RAEmployee.ofOwner} :necessary-tags #{:RAEmployee.ofOwner :RAOwner.me}}})))
    Returns a map with tags and queries generated to obtain entities for indicated user:
@@ -333,7 +351,7 @@
   "
   ([entities-by-name scoping-defintion push?]
    (get-scoping-queries entities-by-name scoping-defintion push? nil))
-  
+
   ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}]
    (let [tags (if-not tags (set (keys scoping-defintion)) tags)
          necessary-tags (if-not necessary-tags (set (keys scoping-defintion)) necessary-tags)
@@ -358,15 +376,15 @@
 
 (defn scope-selected-tags-with-tree
   "Takes:
-   a snapshot, 
+   a snapshot,
    a user object from DB,
-   entities-by-name, 
+   entities-by-name,
    parsed (and validated) EDN of scoping rules,
    scoping-sets, a map of sets indiacting which tags must be scoped per tag calculated with scope_dependency/get-minimum-scoping-sets
    tags, set of desired tags.
-   
+
    It is advised to calculacte scoping sets once and pass the result.
-   A typical invocation looks like this: 
+   A typical invocation looks like this:
    (scope-selected-tags-with-tree config (d/db db/conn) user entities-by-name validated-scope scoping-sets #{:RARestaurant.ofOwner})))
 
    Returns a map with db ids, something like:
@@ -374,13 +392,13 @@
   "
   [config snapshot user entities-by-name scoping-defintion scoping-sets tags]
   (let [necessary-tags (->> tags
-                            (map (fn [tag] 
+                            (map (fn [tag]
                                    (let [all-tags (keys scoping-defintion)]
                                      (->> all-tags
                                           (filter #(contains? (tag scoping-sets) %) )
                                           set))))
-                            (reduce clojure.set/union)) 
-        queries (get-scoping-queries entities-by-name scoping-defintion false {:tags tags :necessary-tags necessary-tags}) 
+                            (reduce clojure.set/union))
+        queries (get-scoping-queries entities-by-name scoping-defintion false {:tags tags :necessary-tags necessary-tags})
         completed-queries (->> queries
                                (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
                                (into {}))]
@@ -391,16 +409,16 @@
 (defn scope
   "Takes config map, a snapshot, a user object from DB, entities-by-name and the parsed EDN of rules, push? and optional set of tags to scope.
    If set of tags to scope is not provided all tags are scoped.
-   A typical invocation looks like this: 
+   A typical invocation looks like this:
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
-  " 
+  "
   ([config snapshot user entities-by-name scoping-defintion push?]
    (scope config snapshot user entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
-  
+
   ([config snapshot user entities-by-name scoping-defintion push? tags]
   (let [queries (get-scoping-queries entities-by-name scoping-defintion push? tags)
         completed-queries (->> queries
@@ -422,8 +440,8 @@
   ; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
   (spec/specs-for-entities entities-by-name {})
   (letfn [(validate-constraint [constraint entity tag all-tags]
-            (if (= :all constraint)
-              ; we add a special 'all' constraint
+            (if (#{:all :none} constraint)
+              ; we add a special 'all' and 'none' constraints
               true
               (if (vector? constraint)
                 (let [allowed-ops #{'= '> '< '>= '<= 'contains?}]
