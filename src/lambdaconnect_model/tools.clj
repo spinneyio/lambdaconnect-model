@@ -88,7 +88,7 @@
 
 (defn parser-for-relationship [rel]
   (if (:to-many rel)
-    #(do (assert (or (nil? %) (sequential? %)) (str "The to-many relationship requires a sequence as its argument: " %)))       
+    #(do (assert (or (nil? %) (sequential? %)) (str "The to-many relationship requires a sequence as its argument: " %))       
          (map (fn [uuid-string] {:app/uuid (string->uuid uuid-string)}) %))
     #(when % {:app/uuid (string->uuid %)})))
 
