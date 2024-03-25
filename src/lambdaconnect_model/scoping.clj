@@ -131,6 +131,10 @@
 
 ; incoming json: {"FIUser" 123 "FIGame" 344} is a dictionary with entity names as keys
 
+(defn none-rules
+  [user-symbol entity-symbol]
+  `[[(~'identity ~user-symbol) ~entity-symbol]
+    [(~'!= ~user-symbol ~entity-symbol)]])
 
 (defn- query-for-rule
   [entities-by-name
@@ -187,8 +191,7 @@
                 ;; Obviously falsy rule which binds output variable and USES it. Do not write [(= true false)] or sth similar,
                 ;; Datomic might optimize that query and skip falsy rule, returning all objects.
                 (let [symbol (symbol-for-tag tag)]
-                  [#{} `[[(~'identity ~'?user) ~symbol]
-                         [(~'!= ~'?user ~symbol)]]])
+                  [#{} (none-rules '?user symbol)])
 
                 (let [op (first rule)]
                   (if (list? rule)
@@ -373,6 +376,107 @@
                   {:user {:dependencies #{} :rules []}})
          filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
      filtered-queries)))
+
+(defn reverse-scoping-query
+  "Input:
+   Single scoping query (one value of map returned by get-scoping-queries)
+   This query efficiently answers question \"As a user, which entities can I access?\".
+   Example input:
+   [:find ?RAEmployee-ofOwner
+    :in $ [?user ...]
+    :where
+    [?user :app/uuid ?G__33024]
+    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]
+
+   Output:
+   Single scoping query.
+   This query efficiently answers question \"Which users can access this entity?\".
+   Example output:
+   [:find ?user
+    :in $ [?RAEmployee-ofOwner ...]
+    :where
+    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]
+    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+    [?user :app/uuid ?G__33024]]"
+  [scoping-rule]
+  (let [[find entity-variable
+         in $ [user-variable dots]
+         where & query-body] scoping-rule
+        new-rule-header [find user-variable in $ [entity-variable dots] where]
+
+        reverse-clauses (fn reverse-clauses [clauses]
+                          (if (= 1 (count clauses))
+                            (let [clause (first clauses)]
+                              [(if (vector? clause)
+                                 clause
+                                 (let [sym (first clause)]
+                                   (case sym
+                                     (not or and) (concat [sym] (mapcat #(reverse-clauses [%]) (reverse (rest clause))))
+                                     (not-join or-join) (concat [sym (second clause)] ;; variables bound by join
+                                                                (mapcat #(reverse-clauses [%]) (reverse (drop 2 clause)))))))])
+                            (reverse (mapcat #(reverse-clauses [%]) clauses))))
+
+        bound-variable (fn bound-variable [clauses variable]
+                         (if (= 1 (count clauses))
+                           (let [clause (first clauses)]
+                             (if (vector? clause)
+                               (some #(= variable %) clause)
+                               (let [sym (first clause)]
+                                 (case sym
+                                   (not-join or-join) (some #(= variable %) (second clause))
+                                   or (every? #(bound-variable [%] variable) (rest clause))
+                                   and (some #(bound-variable [%] variable) (rest clause))
+                                   false))))
+                           (some #(bound-variable [%] variable) clauses)))
+
+        universal-binding (fn [sym]
+                            [sym (if (= sym user-variable)
+                                   :user/username
+                                   (-> sym str (str/split #"-") first (subs 1) (keyword "ident__")))])
+
+        reversed-query-body
+        (condp = query-body
+          [(universal-binding entity-variable)] [(universal-binding user-variable)]
+          (none-rules user-variable entity-variable) (none-rules entity-variable user-variable)
+          (letfn [(validate-clause
+                    [clause variable]
+                    (if (vector? clause)
+                      [clause]
+                      (fix-variable-binding variable false [clause])))
+                  (fix-variable-binding
+                    [variable requires-and clauses]
+                    (if (= 1 (count clauses))
+                      (let [clause (first clauses)]
+                        (if (vector? clause)
+                          (if (bound-variable clauses variable)
+                            clauses
+                            (if requires-and
+                              [(list 'and clause (universal-binding variable))]
+                              [clause (universal-binding variable)]))
+                          (let [sym (first clause)]
+                            [(case sym
+                               not-join (concat (take 2 clause) (fix-variable-binding variable false (drop 2 clause)))
+                               or-join (let [bindings (second clause)
+                                             bindings (if (seq (filter #(= % variable) bindings))
+                                                        bindings
+                                                        (conj bindings variable))]
+                                         (concat [sym bindings]
+                                                 (reduce (fn [clauses variable]
+                                                           (mapcat #(fix-variable-binding variable true [%]) clauses))
+                                                         (drop 2 clause)
+                                                         bindings)))
+                               or (concat [sym] (mapcat #(fix-variable-binding variable true [%]) clauses))
+                               and (concat [sym] (fix-variable-binding variable false (rest clause)))
+                               not clause)])))
+                      (let [clauses (mapcat #(validate-clause % variable) clauses)]
+                        (if (bound-variable clauses variable)
+                          clauses
+                          (concat clauses [(universal-binding variable)])))))]
+            (->> query-body
+                 reverse-clauses
+                 (fix-variable-binding user-variable false))))]
+    (into new-rule-header reversed-query-body)))
 
 (defn scope-selected-tags-with-tree
   "Takes:
