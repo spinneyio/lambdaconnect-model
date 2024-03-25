@@ -84,6 +84,30 @@
   ([entities-by-name scoping-defintion push? tags]
   (scoping/get-scoping-queries entities-by-name scoping-defintion push? tags)))
 
+(defn reverse-scoping-query
+  "Input:
+   Single scoping query (one value of map returned by get-scoping-queries)
+   This query efficiently answers question \"As a user, which entities can I access?\".
+   Example input:
+   [:find ?RAEmployee-ofOwner
+    :in $ [?user ...]
+    :where
+    [?user :app/uuid ?G__33024]
+    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]
+   Output:
+   Single scoping query.
+   This query efficiently answers question \"Which users can access this entity?\".
+   Example output:
+   [:find ?user
+    :in $ [?RAEmployee-ofOwner ...]
+    :where
+    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]
+    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
+    [?user :app/uuid ?G__33024]]"
+  [scoping-rule]
+  (scoping/reverse-scoping-query scoping-rule))
+
 (defn scope-selected-tags-with-tree
   "Takes:
    a config map,

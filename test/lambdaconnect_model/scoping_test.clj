@@ -91,13 +91,81 @@
                                                      :in $ [?user ...]
                                                      :where
                                                      [(identity ?user) ?LACnysInfo-system]
-                                                     [(!= ?user ?LACnysInfo-system)]]}]
+                                                     [(!= ?user ?LACnysInfo-system)]]}
+              expected-reverse-queries {:LAUser.me '[:find
+                                                     ?user
+                                                     :in
+                                                     $
+                                                     [?LAUser-me ...]
+                                                     :where
+                                                     [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                     [?user :app/uuid ?G__28253]]
+                                        :LALocation.fromUser '[:find
+                                                               ?user
+                                                               :in
+                                                               $
+                                                               [?LALocation-fromUser ...]
+                                                               :where
+                                                               [?LAUser-me :LAUser/address ?LALocation-fromUser]
+                                                               [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                               [?user :app/uuid ?G__28253]]
+                                        :LAGame.organisedByUser '[:find
+                                                                  ?user
+                                                                  :in
+                                                                  $
+                                                                  [?LAGame-organisedByUser ...]
+                                                                  :where
+                                                                  (or-join [?user ?LAGame-organisedByUser]
+                                                                           (and [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]
+                                                                                [?LAUser-me :LAUser/internalUserId ?G__8937]
+                                                                                [?user :app/uuid ?G__8937])
+                                                                           (and [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                                [?user :user/username]))]
+                                        :LATicketsSold.byUserEvent '[:find
+                                                                     ?user
+                                                                     :in
+                                                                     $
+                                                                     [?LATicketsSold-byUserEvent ...]
+                                                                     :where
+                                                                     [?LATicketsSold-byUserEvent :LATicketsSold/location ?LALocation-fromUser]
+                                                                     [?LAUser-me :LAUser/address ?LALocation-fromUser]
+                                                                     [?LATicketsSold-byUserEvent :LATicketsSold/game ?LAGame-organisedByUser]
+                                                                     (or-join [?user ?LAGame-organisedByUser]
+                                                                              (and [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]
+                                                                                   [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                                                   [?user :app/uuid ?G__28253])
+                                                                              (and [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                                   [?user :user/username]))
+                                                                     [?LAUser-me :LAUser/internalUserId ?G__28253]
+                                                                     [?user :app/uuid ?G__28253]]
+                                        :LATeam.playedInGame '[:find
+                                                               ?user
+                                                               :in
+                                                               $
+                                                               [?LATeam-playedInGame ...]
+                                                               :where
+                                                               [?LATeam-playedInGame :LATeam/playedIn ?LAGame-organisedByUser]
+                                                               (or-join [?user ?LAGame-organisedByUser]
+                                                                        (and [?LAGame-organisedByUser :LAGame/organiser ?LAUser-me]
+                                                                             [?LAUser-me :LAUser/internalUserId ?G__8960]
+                                                                             [?user :app/uuid ?G__8960])
+                                                                        (and [?LAGame-organisedByUser :LAGame/inThePast true]
+                                                                             [?user :user/username]))]
+                                        :LASyncInfo.system '[:find ?user :in $ [?LASyncInfo-system ...] :where [?user :user/username]]
+                                        :LACnysInfo.system '[:find ?user
+                                                             :in $ [?LACnysInfo-system ...]
+                                                             :where
+                                                             [(identity ?LACnysInfo-system) ?user]
+                                                             [(!= ?LACnysInfo-system ?user)]]}]
           (testing "all queries expected present"
             (doseq [[tag _] expected-queries]
               (is (contains? queries tag))))
           (testing "query equality"
             (doseq [[tag query] queries]
               (compare-query query (tag expected-queries))))
+          (testing "reverse queries"
+            (doseq [[tag query] queries]
+              (compare-query (mp/reverse-scoping-query query) (tag expected-reverse-queries))))
          (testing "get selected tags"
            (let [all-subsets (->> (set (keys scoping-example))
                                   (combinatorics/subsets)
