@@ -543,37 +543,45 @@
 (defn validate-pull-scope [entities-by-name edn]
   ; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
   (spec/specs-for-entities entities-by-name {})
-  (letfn [(validate-constraint [constraint entity tag all-tags]
+  (letfn [(constant? [o] (and (keyword? o) (= "constant" (namespace o))))
+          
+          (validate-constraint [constraint entity tag all-tags]
             (if (#{:all :none} constraint)
               ; we add a special 'all' and 'none' constraints
               true
               (if (vector? constraint)
-                (let [allowed-ops #{'= '> '< '>= '<= 'contains?}]
-                  (assert (= 3 (count constraint)) (str "Each constraint needs to have three elements: " constraint))
+                (let [allowed-ops #{'= '> '< '>= '<= 'contains? 'allowed-if}]                  
                   (assert (allowed-ops (first constraint)) (str "We only support the following ops: " allowed-ops " in constraint: " constraint))
-                  (let [[op arg1 arg2] constraint
-                        attribute (get (:attributes entity) (name arg1))
-                        relationship (get (:relationships entity) (name arg1))]
-                    (assert (or attribute relationship) (str "The first argument of a constraint needs to be a local field for entity " (:name entity) " but it is not: " arg1))
-                    (when attribute
-                      (let [permitted-ops (cond
-                                            (#{:db.type/instant :db.type/long :db.type/double :db.type/float} (:type attribute)) #{'= '> '< '>= '<=}
-                                            (#{:db.type/boolean :db.type/uuid :db.type/uri} (:type attribute))  #{'=}
-                                            (#{:db.type/string} (:type attribute))  #{'= 'contains?}
-                                            :else #{})]
-                        (if (not (keyword? arg2)) (validate-attribute tag entity (:name attribute) arg2)
-                            (let [rf (remote-field? arg2 all-tags)]
+                  (if (= (first constraint) 'allowed-if)
+                    (let [_ (assert (= 2 (count constraint)) (str "This constraint needs to have two elements: " constraint))
+                          [op constant] constraint]
+                      (assert (constant? constant) (str "The constraint has to have a constant keyword expression as its argument: " constraint)))                  
+                    (let [_ (assert (= 3 (count constraint)) (str "This constraint needs to have three elements: " constraint))
+                          [op arg1 arg2] constraint
+                          attribute (get (:attributes entity) (name arg1))
+                          relationship (get (:relationships entity) (name arg1))]
+                      (assert (or attribute relationship) (str "The first argument of a constraint needs to be a local field for entity " (:name entity) " but it is not: " arg1))
+                      (when attribute
+                        (let [permitted-ops (cond
+                                              (#{:db.type/instant :db.type/long :db.type/double :db.type/float} (:type attribute)) #{'= '> '< '>= '<=}
+                                              (#{:db.type/boolean :db.type/uuid :db.type/uri} (:type attribute))  #{'=}
+                                              (#{:db.type/string} (:type attribute))  #{'= 'contains?}
+                                              :else #{})]
+                          (if (or (not (keyword? arg2))
+                                  (constant? arg2)) (validate-attribute tag entity (:name attribute) arg2)
+                              (let [rf (remote-field? arg2 all-tags)]
                                         ; rf is attribute, relationship or true (special :user tag)
-                              (assert rf (str "The second argument of a constraint needs to be a constant or a reference to a matching type tag. See " (:name entity) " value: " arg2))
-                              (assert (or (= true rf) (= (:type rf) (:type attribute))) (str "The fields are not of teh same type: " arg1 ": " (:type attribute) ", " arg2 ": " (:type rf)))))
-                        (assert (permitted-ops op) (str "The operation is not permitted: " op " for " (:name attribute) " on " (:name entity)))))
-
-                    (when relationship
-                      (let [permitted-ops #{'= 'contains?}
-                            rf (correct-relationship? relationship arg2 all-tags)]
-
-                        (assert (permitted-ops op) (str "The operation is not permitted: " op " for " (:name attribute) " on " (:name entity)))
-                        (assert rf (str "The second argument of a constraint has to be a matching type tag. See " (:name entity) " value: " arg2 ": " (:name relationship)))))))
+                                (assert rf (str "The second argument of a constraint needs to be a constant or a reference to a matching type tag. See " (:name entity) " value: " arg2))
+                                (assert (or (= true rf) (= (:type rf) (:type attribute))) (str "The fields are not of teh same type: " arg1 ": " (:type attribute) ", " arg2 ": " (:type rf)))))
+                          (assert (permitted-ops op) (str "The operation is not permitted: " op " for " (:name attribute) " on " (:name entity)))))
+                      
+                      (when relationship
+                        (let [permitted-ops #{'= 'contains?}
+                              rf (correct-relationship? relationship arg2 all-tags)]
+                          
+                          (assert (permitted-ops op) (str "The operation is not permitted: " op " for " (:name attribute) " on " (:name entity)))
+                          (assert rf (str "The second argument of a constraint has to be a matching type tag. See " (:name entity) " value: " arg2 ": " (:name relationship))))))))
+                ;; not, or, and
                 (let [op (first constraint)]
                   (assert (list? constraint) (str "The constraint needs to either be a list or a vector: " constraint))
                   (cond (= op 'not) (do
@@ -620,15 +628,15 @@
                        (when (or (and entity relationship) (= (first parts) "user"))
                          (or relationship true)))))))
 
-
           (validate-attribute [tag entity attribute-name value]
             (let [attribute (get (:attributes entity) attribute-name)
-                  parsed ((t/parser-for-attribute attribute) value)]
+                  parsed (when (not (constant? value)) ((t/parser-for-attribute attribute) value))]
               (assert attribute (str "Entity: " tag " doesn't have the attribute: " attribute-name))
               (assert (or (:optional attribute) (not (nil? value))) (str "Non-optional attribute " (:name attribute) " has nil value for tag: " tag))
-              (assert (or (and (nil? value) (nil? parsed)) (and (not (nil? value)) (not (nil? parsed)))) (str "Unable to parse attribute " (:name attribute) " with value: " value " for tag: " tag))
-              (assert (s/valid? (t/datomic-name attribute) parsed) (s/explain-str (t/datomic-name attribute) parsed))))
-
+              (when-not (constant? value)                
+                  (assert (or (and (nil? value) (nil? parsed)) (and (not (nil? value)) (not (nil? parsed)))) (str "Unable to parse attribute " (:name attribute) " with value: " value " for tag: " tag))
+                  (assert (s/valid? (t/datomic-name attribute) parsed) (s/explain-str (t/datomic-name attribute) parsed)))))
+            
           (validate-permission [tag entity permission]
             (assert (map? permission) (str "Permissions need to be a map for " tag ", " permission))
             (assert (subset? (set (keys permission)) #{:modify :create :protected-fields :writable-fields}) (str "Permission for " tag " cannot have fields: " (difference (set (keys permission)) #{:modify :create :protected-fields :writable-fields})))
@@ -637,15 +645,18 @@
                         create false
                         protected-fields []
                         writable-fields []}} permission]
-              (assert (boolean? modify) (str "'modify' field in permissions for " tag " needs to be a boolean"))
-              (assert (boolean? create) (str "'create' field in permissions for " tag " needs to be a boolean"))
+              (assert (or (boolean? modify) (constant? modify)) (str "'modify' field in permissions for " tag " needs to be a boolean or constant reference"))
+              (assert (or (boolean? create) (constant? create)) (str "'create' field in permissions for " tag " needs to be a boolean or constant reference"))
               (assert (vector? protected-fields) (str "'protected-fields' field in permissions for " tag " needs to be a vector"))
               (assert (vector? writable-fields) (str "'writable-fields' field in permissions for " tag " needs to be a vector"))
               (assert (empty? (intersection (set protected-fields) (set writable-fields))) (str "'protected-fields' and 'writable-fields' for tag " tag " cannot have fields that are common: " (intersection (set protected-fields) (set writable-fields))))
               (doseq [field (concat protected-fields writable-fields)]
                 (let [attribute (get (:attributes entity) field)
                       relationship (get (:relationships entity) field)]
-                  (assert (or attribute relationship) (str "There is no such field as '" field "' in 'writable-fields' or 'protected-fields' for " tag))))))]
+                  (assert (or attribute 
+                              relationship 
+                              (constant? field)) 
+                              (str "There is no such field or constant as '" field "' in 'writable-fields' or 'protected-fields' for " tag))))))]
 
     (let [get-entity #(first (str/split (name %) #"\."))
 
