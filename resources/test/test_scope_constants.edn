@@ -9,6 +9,8 @@
                                      :writable-fields ["games"]}}
 
  :LALocation.allowed-if {:constraint [allowed-if :constant/wow]
+                         :replace-fields {:city :country
+                                          :latitude :constant/lat}
                          :permissions {:modify true
                                        :create false
                                        :writable-fields ["games"]}}

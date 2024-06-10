@@ -515,19 +515,19 @@
    If set of tags to scope is not provided all tags are scoped.
    A typical invocation looks like this:
   (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false)
-  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUuser.me :NOLanguage.mine})
+  (scope config (d/db db/conn) user entities-by-name (clojure.edn/read-string (slurp \"resources/model/pull-scope.edn\")) false #{:NOUser.me :NOLanguage.mine})
 
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
   "
   ([config snapshot user entities-by-name scoping-defintion push?]
    (scope config snapshot user entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
-
+    
   ([config snapshot user entities-by-name scoping-defintion push? tags]
   (let [queries (get-scoping-queries entities-by-name scoping-defintion push? tags)
         completed-queries (->> queries
-                                      (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
-                                      (into {}))
+                               (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
+                               (into {}))
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) completed-queries))]
     (->> filtered-queries
          (pmap (fn [x] (apply (partial execute-query config) x)))
@@ -628,9 +628,28 @@
                        (when (or (and entity relationship) (= (first parts) "user"))
                          (or relationship true)))))))
 
+          (validate-replacement [tag entity attribute-name replacement-attribute-name]
+            (let [attribute (get (:attributes entity) attribute-name)
+                  replacement-attribute (get (:attributes entity) (if (keyword? replacement-attribute-name)
+                                                                    (name (replacement-attribute-name))
+                                                                    replacement-attribute-name))]
+              (assert (and attribute replacement-attribute) (str "One of attributes: #{" attribute-name ", " replacement-attribute-name "} not found on entity " (:name entity)))
+              (assert (= (:type attribute) (:type replacement-attribute)) (str "Types do not match for replacement: " attribute-name " with " replacement-attribute-name))
+              (assert (not (and (:optional replacement-attribute) 
+                                (not (:optional attribute)))) (str "Non-optional attribute " attribute-name " cannot be replaced by optional " replacement-attribute-name))
+              (assert (= (str (:regular-expression attribute))                         
+                         (str (:regular-expression replacement-attribute))) (str "Different regex validation for " attribute-name " and " replacement-attribute-name))
+              (assert (= (:min-value attribute) 
+                         (:min-value replacement-attribute)) (str "Different min-length validation for " attribute-name " and " replacement-attribute-name))
+              (assert (= (:max-value attribute) 
+                         (:max-value replacement-attribute)) (str "Different max-length validation for " attribute-name " and " replacement-attribute-name))))
+
           (validate-attribute [tag entity attribute-name value]
             (let [attribute (get (:attributes entity) attribute-name)
-                  parsed (when (not (constant? value)) ((t/parser-for-attribute attribute) value))]
+                  parsed (when (not (constant? value)) 
+                           (try 
+                             ((t/parser-for-attribute attribute) value)
+                             (catch Exception _ (assert false (str "Wrong value: " value " for attribute: " attribute-name)))))]
               (assert attribute (str "Entity: " tag " doesn't have the attribute: " attribute-name))
               (assert (or (:optional attribute) (not (nil? value))) (str "Non-optional attribute " (:name attribute) " has nil value for tag: " tag))
               (when-not (constant? value)                
@@ -679,8 +698,11 @@
                                         ; fields
 
                 (doseq [[attribute-name replacement] (:replace-fields description)]
-                  (validate-attribute tag entity (name attribute-name) replacement))
-
+                  (cond (and (keyword? replacement)
+                             (not (namespace replacement)))
+                        (validate-replacement tag entity (name attribute-name) (name replacement))
+                        (constant? replacement) true
+                        :default (validate-attribute tag entity (name attribute-name) replacement)))
 
                 (validate-permission tag entity (:permissions description))
 
