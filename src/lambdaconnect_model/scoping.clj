@@ -137,10 +137,15 @@
     [(~'!= ~user-symbol ~entity-symbol)]])
 
 (defn- query-for-rule
+  "returns a vector with dependencies set as first argument and rules as second.
+   for example:
+
+  [#{} []] "
   [entities-by-name
    tag
    rule
    applied-queries ; { tag {:dependencies #{:NOUser.me :NOMessage.sent} :rules [[?user :app/uuid ?m] [...]]}}
+   constants
    ]
   (let [get-entity (fn [tag] (when tag (get entities-by-name (first (str/split (or (namespace tag) (name tag)) #"\.")))))
         symbol-for-tag #(when (keyword? %) (symbol (str "?" (reduce (fn [s1 s2] (str s1 "-" s2)) (str/split (or (namespace %) (name %)) #"\.")))))
@@ -194,98 +199,170 @@
                   [#{} (none-rules '?user symbol)])
 
                 (let [op (first rule)]
-                  (if (list? rule)
-                    (let [internal-wheres (map #(where-for-rule % false #{}) (rest rule))
-                          dependency-list (map nested-dependencies (map first internal-wheres))
-                          common-dependencies (reduce (if (= op 'and) union intersection) dependency-list)
-                          final-wheres (map #(where-for-rule % false common-dependencies) (rest rule))
-                          internal-queries (reduce concat (map second final-wheres))
-                          particular-dependencies (map #(difference % common-dependencies ignored-dependencies) dependency-list)
-                          zipped (map vector (map second final-wheres) particular-dependencies)
-                          dependent-entities-from-common (union #{'?user entity-symbol} (set (map symbol-for-tag common-dependencies)))
-                          appended (reduce concat (map (fn [[where dep]]
-                                                         (let [rules (reorder-rules (set (dependent-rules dep common-dependencies where)) #{entity-symbol})]
-                                                           (if (and (> (count rules) 1) (= op 'or)) [`(~'and ~@rules)] rules))) zipped))
-                          used-entities (reduce union (map (fn [[where dep]] (find-all-symbols (dependent-rules dep common-dependencies where))) zipped))
-                          dependent-entities (intersection dependent-entities-from-common used-entities)
-                          ;; _ (println "OP: " op "rule: " rule)
-                          ;; _ (println "DEPENDENT: " dependent-entities-from-common)
-                          ;; _ (println "USED: " used-entities)
-                          ;; _ (println "INTerSeCTION: " (intersection dependent-entities-from-common used-entities))
+                  (if (= 'allowed-if op)
+                    (let [const-key (-> 
+                                     rule
+                                     second
+                                     name
+                                     keyword)
+                          _ (assert (contains? constants const-key) (str "The rule " rule " contains a constant " const-key " not present in constants map."))
+                          const (const-key constants)
+                          const-val (if (delay? const) @const const) 
                           ]
-                      ;; (when (or (= op 'and) (= op 'or))
-                      ;;   (println "=================================================================")
-                      ;;   (println "")
-                      ;;   (println "--------- DEBUG WHERE FOR RULE OP=" (if (= op 'and) "AND" "OR") "-------------------")
-                      ;;   (println "Relevant tags: " ordered-tags)
-                      ;;   (println "----------------------------")
-                      ;;   (println "Dependency list: " dependency-list)
-                      ;;   (println "----------------------------")
-                      ;;   (println "Dependent entities: " dependent-entities)
-                      ;;   (println "----------------------------")
-                      ;;   (println "common-dependencies: " common-dependencies)
-                      ;;   (println "----------------------------")
-                      ;;   (println "internal-queries: " internal-queries)
-                      ;;   (println "----------------------------")
-                      ;;   (println "particular-dependencies: " particular-dependencies)
-                      ;;   (println "----------------------------")
-                      ;;   (println "appended: " appended)
-                      ;;   (println "----------------------------")
-                      ;;    )
+                      (if top-level 
+                        (where-for-rule (if const-val :all :none) top-level ignored-dependencies)
+                        ;; We signal a special constant based rule as a boolean in the second arg instead of a real rule
+                        [#{} (if const-val true false)]
+                        ))                    
+                    (if (list? rule)
+                      (let [internal-wheres (map #(where-for-rule % false #{}) (rest rule))]
+                        (let [boolean-wheres (->> internal-wheres
+                                                     (map second)
+                                                     (map boolean?))
+                              has-bools? (seq (filter identity boolean-wheres))
+                              boolean-where-vals (->> internal-wheres
+                                                     (map second)
+                                                     (filter boolean?))]
+                          (if has-bools?
+                            ;; one of the nested rules on this level is a boolean const
+                            (cond (= op 'not)
+                                  ;; Not always has one element
+                                  (if top-level 
+                                    (where-for-rule (if (first boolean-where-vals) :none :all) top-level ignored-dependencies)
+                                    ;; We signal a special constant based rule as a boolean in the second arg instead of a real rule
+                                    [#{} (not (first boolean-where-vals))])
 
-                      [common-dependencies (cond
-                                             (= op 'and) (if top-level
-                                                           appended
-                                                           `[(~'and ~@appended)])
-                                             (= op 'or)  `[(~'or-join [~@dependent-entities] ~@appended)]
-                                             (= op 'not) `[(~'not ~@internal-queries)])])
-                    (let [value (second rule)
-                          target (nth rule 2)
-                          relevant-tags (relevant-tags rule)
-                          user-target (when-not (boolean? target)
-                                        (if (and (= (name target) "uuid") (= (namespace target) "user")) :app/uuid target))
-                          target-tag (first relevant-tags)
-                          target-symbol (symbol-for-tag target-tag)
-                          attribute (get (:attributes entity) (name value))
-                          relationship (get (:relationships entity) (name value))
-                          target-entity (get-entity target-tag)
-                          target-attribute (when (keyword? target) (get (:attributes target-entity) (name target)))
-                          target-relationship (when target-tag (get (:relationships target-entity) (:inverse-name relationship)))
-                          target-datomic (when target-tag (get (:datomic-relationships target-entity) (:inverse-name relationship)))
-                          g1 (symbol (str "?" (gensym)))
-                          g2 (symbol (str "?" (gensym)))
-                          g3 (symbol (str "?" (gensym)))]
-                      [relevant-tags
-                       (cond
-                            ; [= :fullName :NOUser.them/lastName]
-                         (and attribute target-attribute)
-                         `[[~target-symbol ~(t/datomic-name target-attribute) ~g1]
-                           [~entity-symbol ~(t/datomic-name attribute) ~g2]
-                           [(~op ~g1 ~g2)]]
+                                  (= op 'or) (let [combined (reduce #(or %1 %2) boolean-where-vals)]
+                                               (if combined 
+                                                 (if top-level 
+                                                   (where-for-rule :all top-level ignored-dependencies)
+                                                   ;; We signal a special constant based rule as a boolean in the second arg instead of a real rule
+                                                   [#{} true])
+                                                 (where-for-rule 
+                                                  ;; This complex form filters only the subrules that do not have boolean value since this was dealt with earlier.
+                                                  (->> (map vector (rest rule) boolean-where-vals)
+                                                       (filter (comp not second)) 
+                                                       (map first)
+                                                       (vec)
+                                                       (concat ['or])
+                                                       (reverse)
+                                                       (into '())) 
+                                                  top-level ignored-dependencies)))
+                                  (= op 'and) (let [combined (reduce #(and %1 %2) boolean-where-vals)]
+                                                (if-not combined 
+                                                  (if top-level 
+                                                    (where-for-rule :none top-level ignored-dependencies)
+                                                    ;; We signal a special constant based rule as a boolean in the second arg instead of a real rule
+                                                    [#{} false])
+                                                  (where-for-rule 
+                                                   ;; This complex form filters only the subrules that do not have boolean value since this was dealt with earlier.
+                                                   (->> (map vector (rest rule) boolean-wheres)
+                                                        (filter (comp not second)) 
+                                                        (map first)
+                                                        (vec)
+                                                        (concat ['and])
+                                                        (reverse)
+                                                        (into '())) 
+                                                   top-level ignored-dependencies))))
+                            (let [dependency-list (map nested-dependencies (map first internal-wheres))
+                                  common-dependencies (reduce (if (= op 'and) union intersection) dependency-list)
+                                  final-wheres (map #(where-for-rule % false common-dependencies) (rest rule))
+                                  internal-queries (reduce concat (map second final-wheres))
+                                  particular-dependencies (map #(difference % common-dependencies ignored-dependencies) dependency-list)
+                                  zipped (map vector (map second final-wheres) particular-dependencies)
+                                  dependent-entities-from-common (union #{'?user entity-symbol} (set (map symbol-for-tag common-dependencies)))
+                                  appended (reduce concat (map (fn [[where dep]]
+                                                                 (let [rules (reorder-rules (set (dependent-rules dep common-dependencies where)) #{entity-symbol})]
+                                                                   (if (and (> (count rules) 1) (= op 'or)) [`(~'and ~@rules)] rules))) zipped))
+                                  used-entities (reduce union (map (fn [[where dep]] (find-all-symbols (dependent-rules dep common-dependencies where))) zipped))
+                                  dependent-entities (intersection dependent-entities-from-common used-entities)
+                                  ;; _ (println "OP: " op "rule: " rule)
+                                  ;; _ (println "DEPENDENT: " dependent-entities-from-common)
+                                  ;; _ (println "USED: " used-entities)
+                                  ;; _ (println "INTerSeCTION: " (intersection dependent-entities-from-common used-entities))
+                                  ]
+                              ;; (when (or (= op 'and) (= op 'or))
+                              ;;   (println "=================================================================")
+                              ;;   (println "")
+                              ;;   (println "--------- DEBUG WHERE FOR RULE OP=" (if (= op 'and) "AND" "OR") "-------------------")
+                              ;;   (println "Relevant tags: " ordered-tags)
+                              ;;   (println "----------------------------")
+                              ;;   (println "Dependency list: " dependency-list)
+                              ;;   (println "----------------------------")
+                              ;;   (println "Dependent entities: " dependent-entities)
+                              ;;   (println "----------------------------")
+                              ;;   (println "common-dependencies: " common-dependencies)
+                              ;;   (println "----------------------------")
+                              ;;   (println "internal-queries: " internal-queries)
+                              ;;   (println "----------------------------")
+                              ;;   (println "particular-dependencies: " particular-dependencies)
+                              ;;   (println "----------------------------")
+                              ;;   (println "appended: " appended)
+                              ;;   (println "----------------------------")
+                              ;;    )
 
-                             ; [= :fullName "marek"]
-                         (and attribute (not (= target-tag :user))) `[[~entity-symbol ~(t/datomic-name attribute) ~target]]
-                             ; [= :client :NOClient.him]
-                         target-relationship (if target-datomic ; ops do not matter for datmic - contains? and = are the same
-                                               `[[~target-symbol ~(t/datomic-name target-relationship) ~entity-symbol]]
-                                               `[[~entity-symbol ~(t/datomic-name relationship) ~target-symbol]])
-                             ; user
-                         :else
-                         (if (= op '=)
-                           (if (= (:type attribute) :db.type/string)
-                             `[[~target-symbol ~user-target ~g1]
-                               [[(~'.toString ~g1) ~g2]]
-                               [~entity-symbol ~(t/datomic-name attribute) ~g2]]
-                             `[[~target-symbol ~user-target ~g1]
-                               [~entity-symbol ~(t/datomic-name attribute) ~g1]])
-                           (if (= (:type attribute) :db.type/string)
-                             `[[~target-symbol ~user-target ~g1]
-                               [[(~'.toString ~g1) ~g3]]
-                               [~entity-symbol ~(t/datomic-name attribute) ~g2]
-                               [(~op ~g2 ~g3)]]
-                             `[[~target-symbol ~user-target ~g1]
-                               [~entity-symbol ~(t/datomic-name attribute) ~g2]
-                               [(~op ~g2 ~g1)]])))])))))]
+                              [common-dependencies (cond
+                                                     (= op 'and) (if top-level
+                                                                   appended
+                                                                   `[(~'and ~@appended)])
+                                                     (= op 'or)  `[(~'or-join [~@dependent-entities] ~@appended)]
+                                                     (= op 'not) `[(~'not ~@internal-queries)])]))))
+                      (let [value (second rule)                
+;                            _ (println "RULE: " rule)
+                            target (let [t (nth rule 2)]
+                                     (if (and (keyword? t)
+                                              (= "constant" (namespace t)))
+                                       (let [t-k (keyword (name t))] 
+                                         (assert (contains? constants t-k) (str "Constants do not contain " t-k))
+                                         (if (delay? (t-k constants)) 
+                                           @(t-k constants) 
+                                           (t-k constants))) 
+                                       t))                       
+                            relevant-tags (relevant-tags rule)
+                            user-target (when-not (boolean? target)
+                                          (if (and (= (name target) "uuid") (= (namespace target) "user")) :app/uuid target))
+                            target-tag (first relevant-tags)
+                            target-symbol (symbol-for-tag target-tag)
+                            attribute (get (:attributes entity) (name value))
+                            relationship (get (:relationships entity) (name value))
+                            target-entity (get-entity target-tag)
+                            target-attribute (when (keyword? target) (get (:attributes target-entity) (name target)))
+                            target-relationship (when target-tag (get (:relationships target-entity) (:inverse-name relationship)))
+                            target-datomic (when target-tag (get (:datomic-relationships target-entity) (:inverse-name relationship)))
+                            g1 (symbol (str "?" (gensym)))
+                            g2 (symbol (str "?" (gensym)))
+                            g3 (symbol (str "?" (gensym)))]
+                        [relevant-tags
+                         (cond
+                                        ; [= :fullName :NOUser.them/lastName]
+                           (and attribute target-attribute)
+                           `[[~target-symbol ~(t/datomic-name target-attribute) ~g1]
+                             [~entity-symbol ~(t/datomic-name attribute) ~g2]
+                             [(~op ~g1 ~g2)]]
+
+                                        ; [= :fullName "marek"]
+                           (and attribute (not (= target-tag :user))) `[[~entity-symbol ~(t/datomic-name attribute) ~target]]
+                                        ; [= :client :NOClient.him]
+                           target-relationship (if target-datomic ; ops do not matter for datmic - contains? and = are the same
+                                                 `[[~target-symbol ~(t/datomic-name target-relationship) ~entity-symbol]]
+                                                 `[[~entity-symbol ~(t/datomic-name relationship) ~target-symbol]])
+                                        ; user
+                           :else
+                           (if (= op '=)
+                             (if (= (:type attribute) :db.type/string)
+                               `[[~target-symbol ~user-target ~g1]
+                                 [[(~'.toString ~g1) ~g2]]
+                                 [~entity-symbol ~(t/datomic-name attribute) ~g2]]
+                               `[[~target-symbol ~user-target ~g1]
+                                 [~entity-symbol ~(t/datomic-name attribute) ~g1]])
+                             (if (= (:type attribute) :db.type/string)
+                               `[[~target-symbol ~user-target ~g1]
+                                 [[(~'.toString ~g1) ~g3]]
+                                 [~entity-symbol ~(t/datomic-name attribute) ~g2]
+                                 [(~op ~g2 ~g3)]]
+                               `[[~target-symbol ~user-target ~g1]
+                                 [~entity-symbol ~(t/datomic-name attribute) ~g2]
+                                 [(~op ~g2 ~g1)]])))]))))))]
       (let [[dependencies rules] (where-for-rule rule true #{})
             additional-rules (reverse (dependent-rules dependencies))
             full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol})) ;(concat additional-rules rules)
@@ -301,7 +378,15 @@
    complete-tags ; #{ tag1 tag2 ... }
    remaining-edn-rules ; {tag1 [= :dada :NOUser.baba], ...}
    applied-wheres ; { tag {:dependencies #{:NOUser.me :NOMessage.sent} :rules [[?user :app/uuid ?m] [...] ]}}
+   constants
    ]
+;  (println "----------------")
+  ;(println complete-tags)
+ ; (pprint (vec (map #(vector % (vec (relevant-tags (% remaining-edn-rules)))) (keys remaining-edn-rules))))
+  ;(println "---------------~~~-")
+  ;(println (keys remaining-edn-rules))
+  
+
   (if (empty? remaining-edn-rules)
     applied-queries
     (let [tag (first (filter #(subset? (relevant-tags (% remaining-edn-rules)) complete-tags) (keys remaining-edn-rules)))]
@@ -310,7 +395,8 @@
                                         entities-by-name
                                         tag
                                         (tag remaining-edn-rules)
-                                        applied-wheres)]
+                                        applied-wheres
+                                        constants)]
         ; (println "Q---------------- QUERY " tag " ---------")
         ; (println query)
 
@@ -318,7 +404,8 @@
                (assoc applied-queries tag query)
                (conj complete-tags tag)
                (dissoc remaining-edn-rules tag)
-               (assoc applied-wheres tag {:dependencies dependencies :rules rules}))))))
+               (assoc applied-wheres tag {:dependencies dependencies :rules rules})
+               constants)))))
 
 
 ; ========================================================================================
@@ -352,13 +439,15 @@
   [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]}
    ...
   "
-  ([entities-by-name scoping-defintion push?]
-   (get-scoping-queries entities-by-name scoping-defintion push? nil))
+  ([entities-by-name scoping-definition push?]
+   (get-scoping-queries entities-by-name scoping-definition push? nil))
 
-  ([entities-by-name scoping-defintion push? {:keys [tags necessary-tags]}]
-   (let [tags (if-not tags (set (keys scoping-defintion)) tags)
-         necessary-tags (if-not necessary-tags (set (keys scoping-defintion)) necessary-tags)
-         relevant-rules (->> scoping-defintion
+  ([entities-by-name scoping-definition push? {:keys [tags necessary-tags]}]
+   (let [constants (:constants scoping-definition)
+         scoping-definition (dissoc scoping-definition :constants)
+         tags (or tags (set (keys scoping-definition)))
+         necessary-tags (or necessary-tags (set (keys scoping-definition)))
+         relevant-rules (->> scoping-definition
                              (filter (fn [[tag description]]
                                        (and (:constraint description)
                                             (or (not push?)
@@ -373,7 +462,8 @@
                   {}
                   #{:user}
                   relevant-rules
-                  {:user {:dependencies #{} :rules []}})
+                  {:user {:dependencies #{} :rules []}}
+                  constants)
          filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
      filtered-queries)))
 
@@ -494,15 +584,15 @@
    Returns a map with db ids, something like:
    {:RAOwner.me #{11122, 1222} :user #{2312312}}
   "
-  [config snapshot user entities-by-name scoping-defintion scoping-sets tags]
+  [config snapshot user entities-by-name scoping-definition scoping-sets tags]
   (let [necessary-tags (->> tags
                             (map (fn [tag]
-                                   (let [all-tags (keys scoping-defintion)]
+                                   (let [all-tags (keys (dissoc scoping-definition :constants))]
                                      (->> all-tags
                                           (filter #(contains? (tag scoping-sets) %) )
                                           set))))
                             (reduce clojure.set/union))
-        queries (get-scoping-queries entities-by-name scoping-defintion false {:tags tags :necessary-tags necessary-tags})
+        queries (get-scoping-queries entities-by-name scoping-definition false {:tags tags :necessary-tags necessary-tags})
         completed-queries (->> queries
                                (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
                                (into {}))]
@@ -520,11 +610,11 @@
   Returns a map with db ids, something like:
   {:NOUser.me #{11122, 1222} :user #{2312312}}
   "
-  ([config snapshot user entities-by-name scoping-defintion push?]
-   (scope config snapshot user entities-by-name scoping-defintion push? (set (keys scoping-defintion))))
+  ([config snapshot user entities-by-name scoping-definition push?]
+   (scope config snapshot user entities-by-name scoping-definition push? (set (keys (dissoc scoping-definition :constants)))))
     
-  ([config snapshot user entities-by-name scoping-defintion push? tags]
-  (let [queries (get-scoping-queries entities-by-name scoping-defintion push? tags)
+  ([config snapshot user entities-by-name scoping-definition push? tags]
+   (let [queries (get-scoping-queries entities-by-name scoping-definition push? {:tags tags :necessary-tags tags})
         completed-queries (->> queries
                                (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
                                (into {}))
