@@ -15,7 +15,8 @@
     (if-let [tag (when-not (#{:all :none} rule) (last rule))]
       (if-not (keyword? tag)
         #{}
-        (if-not (namespace tag)
-          #{tag}
-          #{(keyword (namespace tag))}))
+        (cond 
+          (= (namespace tag) "constant") #{}
+          (namespace tag) #{(keyword (namespace tag))}
+          :default #{tag}))
       #{})))
