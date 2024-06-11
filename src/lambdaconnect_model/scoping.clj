@@ -207,8 +207,7 @@
                                      keyword)
                           _ (assert (contains? constants const-key) (str "The rule " rule " contains a constant " const-key " not present in constants map."))
                           const (const-key constants)
-                          const-val (if (delay? const) @const const) 
-                          ]
+                          const-val (if (delay? const) @const const)]
                       (if top-level 
                         (where-for-rule (if const-val :all :none) top-level ignored-dependencies)
                         ;; We signal a special constant based rule as a boolean in the second arg instead of a real rule
@@ -309,14 +308,18 @@
                                                      (= op 'not) `[(~'not ~@internal-queries)])]))))
                       (let [value (second rule)                
 ;                            _ (println "RULE: " rule)
+                            attribute (get (:attributes entity) (name value))
                             target (let [t (nth rule 2)]
                                      (if (and (keyword? t)
                                               (= "constant" (namespace t)))
-                                       (let [t-k (keyword (name t))] 
+                                       (let [t-k (keyword (name t))
+                                             constant-value (if (delay? (t-k constants)) 
+                                                              @(t-k constants) 
+                                                              (t-k constants))] 
                                          (assert (contains? constants t-k) (str "Constants do not contain " t-k))
-                                         (if (delay? (t-k constants)) 
-                                           @(t-k constants) 
-                                           (t-k constants))) 
+                                         (assert attribute (str "Error in rule: " rule " - only attribute fields can be assigned constants."))
+                                         (assert (s/valid? (t/datomic-name attribute) constant-value) (s/explain-str (t/datomic-name attribute) constant-value))
+                                         constant-value) 
                                        t))                       
                             relevant-tags (relevant-tags rule)
                             user-target (when-not (boolean? target)
