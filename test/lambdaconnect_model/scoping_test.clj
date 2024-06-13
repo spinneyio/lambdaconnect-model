@@ -7,9 +7,9 @@
             [clojure.string :as str]))
 
 
-(def entities-by-name-example (mp/entities-by-name "resources/test/test_model.xml"))
-(def scoping-example (mp/read-pull-scoping-edn "resources/test/test_scope.edn" entities-by-name-example))
-(def scoping-constant-example (mp/read-pull-scoping-edn "resources/test/test_scope_constants.edn" entities-by-name-example))
+(def entities-by-name-example (mp/entities-by-name "env/test/test-model-2.xml"))
+(def scoping-example (mp/read-pull-scoping-edn "env/test/test-scope.edn" entities-by-name-example))
+(def scoping-constant-example (mp/read-pull-scoping-edn "env/test/test-scope-constants.edn" entities-by-name-example))
 
 
 (deftest constants

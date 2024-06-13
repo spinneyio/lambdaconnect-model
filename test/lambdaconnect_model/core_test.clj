@@ -8,14 +8,14 @@
 
 (deftest test-core-data-xml-conversion
   (testing "Reading model file one"
-    (let [model (mp/entities-by-name "resources/model.xml")]
+    (let [model (mp/entities-by-name "env/test/test-model-1.xml")]
       (is (= (count model) 4))
       (testing ";Json to model converter"
         (mp/specs model {:LAUser/gender #(s/gen #{"M" "F" "U"})
                          :LAUser/email (fn [] (gen/fmap #(str % "@test.com") (gen/string-alphanumeric)))})
         (try
           (let [game-model (get model "LAGame")
-                json (-> "resources/fixtures.json"
+                json (-> "env/test/fixtures.json"
                          slurp
                          read-str)
                 ent (-> json (get "LAGame") first (mp/json-to-clojure game-model))
@@ -33,14 +33,14 @@
             (.printStackTrace e))))))
 
   (testing "Schema from model"
-    (let [model (mp/entities-by-name "resources/model.xml")
+    (let [model (mp/entities-by-name "env/test/test-model-1.xml")
           schema (mp/datomic-schema model)]
       (is (= (+ 37 (count model)) (count schema)))))
 
   (testing "Specs"
-    (mp/specs (mp/entities-by-name "resources/model.xml")))
+    (mp/specs (mp/entities-by-name "env/test/test-model-1.xml")))
   
   (testing "User info"
-    (let [model (mp/entities-by-name "resources/model.xml")]
+    (let [model (mp/entities-by-name "env/test/test-model-1.xml")]
       (is (seq (get-in model ["LAGame" :user-info])))
       (is (seq (get-in model ["LAGame" :attributes "gameDescription"]))))))
