@@ -23,14 +23,16 @@
                 "UUID"       :db.type/uuid
                 "URI"        :db.type/string})
 
-(def basic-validators {:db.type/string string?
-                       :db.type/instant inst?
-                       :db.type/boolean boolean?
-                       :db.type/long int?
-                       :db.type/uuid uuid?
-                       :db.type/double double?
-                       :db.type/float float?
-                       :db.type/bytes bytes?})
+(def basic-validator-symbols {:db.type/string 'string?
+                              :db.type/instant 'inst?
+                              :db.type/boolean 'boolean?
+                              :db.type/long 'int?
+                              :db.type/uuid 'uuid?
+                              :db.type/double 'double?
+                              :db.type/float 'float?
+                              :db.type/bytes 'bytes?})
+
+(def basic-validators (into {} (map (fn [[name symbol]] [name (resolve symbol)]) basic-validator-symbols)))
 
 (s/def ::name string?)
 (s/def ::entity-name string?)

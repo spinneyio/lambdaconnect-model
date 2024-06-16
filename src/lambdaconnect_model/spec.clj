@@ -1,5 +1,6 @@
 (ns lambdaconnect-model.spec
   (:require [clojure.spec.alpha]
+            [clojure.walk :as walk]
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.data-xml :as xml]))
 
@@ -8,70 +9,61 @@
 (clojure.spec.alpha/def :app/createdAt inst?)
 (clojure.spec.alpha/def :app/updatedAt inst?)
 
-(clojure.spec.alpha/def :app/reference (clojure.spec.alpha/keys :req [:app/uuid]))
+(clojure.spec.alpha/def :app/relationship (clojure.spec.alpha/keys :req [:app/uuid]))
 
-
-(defn validator-for-attribute [attr]
-  (let [basic (xml/basic-validators (:type attr))
-        advanced (concat [{:validator basic
-                           :description basic}]
+(defn- validator-form-for-attribute [attr]
+   (let [basic (xml/basic-validator-symbols (:type attr))
+         advanced (concat [basic]
                          (filter identity
                                  (case (:type attr)
                                    :db.type/string [(when (:regular-expression attr)
-                                                      {:validator #(re-matches (:regular-expression attr) %)
-                                                       :description (str  "Regexp: '" (:regular-expression attr) "'")})
+                                                       `#(re-matches ~(:regular-expression attr) %))
                                                     (when (:min-value attr)
-                                                      {:validator #(>= (count %) (:min-value attr))
-                                                       :description (str "Min-length: " (:min-value attr))})
+                                                      `#(>= (count %) ~(:min-value attr)))                                                      
                                                     (when (:max-value attr)
-                                                      {:validator #(<= (count %) (:max-value attr))
-                                                       :description (str "Max-length: " (:max-value attr))})]
+                                                      `#(<= (count %) ~(:max-value attr)))]
                                    :db.type/long [(when (:min-value attr)
-                                                    {:validator #(>= % (:min-value attr))
-                                                     :description (str "Min-value: " (:min-value attr))})
+                                                    `#(>= % ~(:min-value attr)))
                                                   (when (:max-value attr)
-                                                    {:validator #(<= % (:max-value attr))
-                                                     :description (str "Max-value " (:max-value attr))})]
+                                                    `#(<= % ~(:max-value attr)))]
                                    :db.type/instant [(when (:min-value attr)
                                         ; We use the default java.util.Date here for simplicity
-                                                       {:validator #(.before (:min-value attr) %)
-                                                        :description (str "Date after: " (:min-value attr))})
+                                                       `#(.before ~(:min-value attr) %))
                                                      (when (:max-value attr)
-                                                       {:validator #(.after (:max-value attr) %)
-                                                        :description (str "Date before: " (:max-value attr))})]
+                                                       `#(.after ~(:max-value attr) %))]
                                    :db.type/float [(when (:min-value attr)
-                                                     {:validator #(>= % (:min-value attr))
-                                                      :description (str "Min-value: " (:min-value attr))})
+                                                     `#(>= % ~(:min-value attr)))
                                                    (when (:max-value attr)
-                                                     {:validator #(<= % (:max-value attr))
-                                                      :description (str "Max-value " (:max-value attr))})]
+                                                      `#(<= % ~(:max-value attr)))]
 
                                    :db.type/double [(when (:min-value attr)
-                                                      {:validator #(>= % (:min-value attr))
-                                                       :description (str "Min-value: " (:min-value attr))})
+                                                      `#(>= % ~(:min-value attr)))
                                                     (when (:max-value attr)
-                                                      {:validator #(<= % (:max-value attr))
-                                                       :description (str "Max-value " (:max-value attr))})]
-                                   [])))]
-    (clojure.spec.alpha/and-spec-impl (map :description advanced) (map :validator advanced) nil)))
+                                                      `#(<= % ~(:max-value attr)))]
+                                   [])))
+         form (if (= 1 (count advanced)) 
+                `~basic
+                `(clojure.spec.alpha/and ~@advanced))]
+     form))
 
 (defn validator-for-relationship
   [rel]
   (let [min (if (:min-value rel) [:min-count (:min-value rel)] [])
         max (if (:max-value rel) [:max-count (:max-value rel)] [])
-        ref (concat [:app/reference] min max)]
+        ref (concat [:app/relationship] min max)]
     (if (:to-many rel)
       (apply (t/functionise clojure.spec.alpha/coll-of) ref)
-      (clojure.spec.alpha/nilable :app/reference))))
+      (clojure.spec.alpha/nilable :app/relationship))))
 
 (defn spec-for-entity
   [generators entity]
   (doseq [attr (filter #(not (t/special-attribs (:name %)))
                        (vals (:attributes entity)))]
-    (let [val (validator-for-attribute attr)
+    (let [val (validator-form-for-attribute attr)
           gen ((t/datomic-name attr) generators)
-          full-validator (if (:optional attr) (clojure.spec.alpha/nilable val) val)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name attr) (if gen (clojure.spec.alpha/with-gen full-validator gen) full-validator))))
+          full-validator-form (if (:optional attr) `(clojure.spec.alpha/nilable ~val) val)
+          final-validator-form `(clojure.spec.alpha/def ~(t/datomic-name attr) ~(if gen `(clojure.spec.alpha/with-gen ~full-validator-form ~gen) full-validator-form))]
+      (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
@@ -94,10 +86,11 @@
   [generators entity]
   (doseq [attr (filter #(not (t/special-attribs (:name %)))
                        (vals (:attributes entity)))]
-    (let [val (validator-for-attribute attr)
+    (let [val (validator-form-for-attribute attr)
           gen ((t/datomic-name attr) generators)
-          full-validator (if (:optional attr) (clojure.spec.alpha/nilable val) val)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name attr) (if gen (clojure.spec.alpha/with-gen full-validator gen) full-validator))))
+          full-validator-form (if (:optional attr) `(clojure.spec.alpha/nilable ~val) val)
+          final-validator-form `(clojure.spec.alpha/def ~(t/datomic-name attr) ~(if gen `(clojure.spec.alpha/with-gen ~full-validator-form ~gen) full-validator-form))]
+      (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
