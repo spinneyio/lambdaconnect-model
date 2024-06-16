@@ -9,7 +9,7 @@
 (clojure.spec.alpha/def :app/createdAt inst?)
 (clojure.spec.alpha/def :app/updatedAt inst?)
 
-(clojure.spec.alpha/def :app/reference (clojure.spec.alpha/keys :req [:app/uuid]))
+(clojure.spec.alpha/def :app/relationship (clojure.spec.alpha/keys :req [:app/uuid]))
 
 (defn validator-for-attribute [attr]
    (let [basic (xml/basic-validator-symbols (:type attr))
@@ -50,10 +50,10 @@
   [rel]
   (let [min (if (:min-value rel) [:min-count (:min-value rel)] [])
         max (if (:max-value rel) [:max-count (:max-value rel)] [])
-        ref (concat [:app/reference] min max)]
+        ref (concat [:app/relationship] min max)]
     (if (:to-many rel)
       (apply (t/functionise clojure.spec.alpha/coll-of) ref)
-      (clojure.spec.alpha/nilable :app/reference))))
+      (clojure.spec.alpha/nilable :app/relationship))))
 
 (defn spec-for-entity
   [generators entity]
