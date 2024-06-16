@@ -3,6 +3,8 @@
             [lambdaconnect-model.core :as mp]
             [lambdaconnect-model.scope-dependency :as scp-dep]))
 
+
+(mp/specs (mp/entities-by-name "env/test/test-model-2.xml"))
 (def scoping-example (mp/read-pull-scoping-edn
                       "env/test/test-scope.edn"
                       (mp/entities-by-name "env/test/test-model-2.xml")))
