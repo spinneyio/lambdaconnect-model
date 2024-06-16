@@ -11,7 +11,7 @@
 
 (clojure.spec.alpha/def :app/relationship (clojure.spec.alpha/keys :req [:app/uuid]))
 
-(defn validator-for-attribute [attr]
+(defn- validator-form-for-attribute [attr]
    (let [basic (xml/basic-validator-symbols (:type attr))
          advanced (concat [basic]
                          (filter identity
@@ -42,9 +42,9 @@
                                                       `#(<= % ~(:max-value attr)))]
                                    [])))
          form (if (= 1 (count advanced)) 
-                basic
+                `~basic
                 `(clojure.spec.alpha/and ~@advanced))]
-     (eval form)))
+     form))
 
 (defn validator-for-relationship
   [rel]
@@ -59,10 +59,11 @@
   [generators entity]
   (doseq [attr (filter #(not (t/special-attribs (:name %)))
                        (vals (:attributes entity)))]
-    (let [val (validator-for-attribute attr)
+    (let [val (validator-form-for-attribute attr)
           gen ((t/datomic-name attr) generators)
-          full-validator (if (:optional attr) (clojure.spec.alpha/nilable val) val)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name attr) (if gen (clojure.spec.alpha/with-gen full-validator gen) full-validator))))
+          full-validator-form (if (:optional attr) `(clojure.spec.alpha/nilable ~val) val)
+          final-validator-form `(clojure.spec.alpha/def ~(t/datomic-name attr) ~(if gen `(clojure.spec.alpha/with-gen ~full-validator-form ~gen) full-validator-form))]
+      (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
@@ -85,10 +86,11 @@
   [generators entity]
   (doseq [attr (filter #(not (t/special-attribs (:name %)))
                        (vals (:attributes entity)))]
-    (let [val (validator-for-attribute attr)
+    (let [val (validator-form-for-attribute attr)
           gen ((t/datomic-name attr) generators)
-          full-validator (if (:optional attr) (clojure.spec.alpha/nilable val) val)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name attr) (if gen (clojure.spec.alpha/with-gen full-validator gen) full-validator))))
+          full-validator-form (if (:optional attr) `(clojure.spec.alpha/nilable ~val) val)
+          final-validator-form `(clojure.spec.alpha/def ~(t/datomic-name attr) ~(if gen `(clojure.spec.alpha/with-gen ~full-validator-form ~gen) full-validator-form))]
+      (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
