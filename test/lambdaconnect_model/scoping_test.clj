@@ -8,6 +8,7 @@
 
 
 (def entities-by-name-example (mp/entities-by-name "env/test/test-model-2.xml"))
+(mp/specs entities-by-name-example)
 (def scoping-example (mp/read-pull-scoping-edn "env/test/test-scope.edn" entities-by-name-example))
 (def scoping-constant-example (mp/read-pull-scoping-edn "env/test/test-scope-constants.edn" entities-by-name-example))
 

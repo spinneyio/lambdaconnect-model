@@ -1,5 +1,6 @@
 (ns lambdaconnect-model.spec
   (:require [clojure.spec.alpha]
+            [clojure.walk :as walk]
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.data-xml :as xml]))
 
@@ -10,50 +11,40 @@
 
 (clojure.spec.alpha/def :app/reference (clojure.spec.alpha/keys :req [:app/uuid]))
 
-
 (defn validator-for-attribute [attr]
-  (let [basic (xml/basic-validators (:type attr))
-        advanced (concat [{:validator basic
-                           :description basic}]
+   (let [basic (xml/basic-validator-symbols (:type attr))
+         advanced (concat [basic]
                          (filter identity
                                  (case (:type attr)
                                    :db.type/string [(when (:regular-expression attr)
-                                                      {:validator #(re-matches (:regular-expression attr) %)
-                                                       :description (str  "Regexp: '" (:regular-expression attr) "'")})
+                                                       `#(re-matches ~(:regular-expression attr) %))
                                                     (when (:min-value attr)
-                                                      {:validator #(>= (count %) (:min-value attr))
-                                                       :description (str "Min-length: " (:min-value attr))})
+                                                      `#(>= (count %) ~(:min-value attr)))                                                      
                                                     (when (:max-value attr)
-                                                      {:validator #(<= (count %) (:max-value attr))
-                                                       :description (str "Max-length: " (:max-value attr))})]
+                                                      `#(<= (count %) ~(:max-value attr)))]
                                    :db.type/long [(when (:min-value attr)
-                                                    {:validator #(>= % (:min-value attr))
-                                                     :description (str "Min-value: " (:min-value attr))})
+                                                    `#(>= % ~(:min-value attr)))
                                                   (when (:max-value attr)
-                                                    {:validator #(<= % (:max-value attr))
-                                                     :description (str "Max-value " (:max-value attr))})]
+                                                    `#(<= % ~(:max-value attr)))]
                                    :db.type/instant [(when (:min-value attr)
                                         ; We use the default java.util.Date here for simplicity
-                                                       {:validator #(.before (:min-value attr) %)
-                                                        :description (str "Date after: " (:min-value attr))})
+                                                       `#(.before ~(:min-value attr) %))
                                                      (when (:max-value attr)
-                                                       {:validator #(.after (:max-value attr) %)
-                                                        :description (str "Date before: " (:max-value attr))})]
+                                                       `#(.after ~(:max-value attr) %))]
                                    :db.type/float [(when (:min-value attr)
-                                                     {:validator #(>= % (:min-value attr))
-                                                      :description (str "Min-value: " (:min-value attr))})
+                                                     `#(>= % ~(:min-value attr)))
                                                    (when (:max-value attr)
-                                                     {:validator #(<= % (:max-value attr))
-                                                      :description (str "Max-value " (:max-value attr))})]
+                                                      `#(<= % ~(:max-value attr)))]
 
                                    :db.type/double [(when (:min-value attr)
-                                                      {:validator #(>= % (:min-value attr))
-                                                       :description (str "Min-value: " (:min-value attr))})
+                                                      `#(>= % ~(:min-value attr)))
                                                     (when (:max-value attr)
-                                                      {:validator #(<= % (:max-value attr))
-                                                       :description (str "Max-value " (:max-value attr))})]
-                                   [])))]
-    (clojure.spec.alpha/and-spec-impl (map :description advanced) (map :validator advanced) nil)))
+                                                      `#(<= % ~(:max-value attr)))]
+                                   [])))
+         form (if (= 1 (count advanced)) 
+                basic
+                `(clojure.spec.alpha/and ~@advanced))]
+     (eval form)))
 
 (defn validator-for-relationship
   [rel]

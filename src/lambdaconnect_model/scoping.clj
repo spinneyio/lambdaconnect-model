@@ -634,10 +634,9 @@
                           (vec scoped-entities)))))
 
 (defn validate-pull-scope [entities-by-name edn]
-  ; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
-  (spec/specs-for-entities entities-by-name {})
-  (letfn [(constant? [o] (and (keyword? o) (= "constant" (namespace o))))
-          
+  ;; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
+  ;; Assumes that model specs have already been constructed (using (spec/specs-for-entities entities-by-name ???) )
+  (letfn [(constant? [o] (and (keyword? o) (= "constant" (namespace o))))          
           (validate-constraint [constraint entity tag all-tags]
             (if (#{:all :none} constraint)
               ; we add a special 'all' and 'none' constraints
