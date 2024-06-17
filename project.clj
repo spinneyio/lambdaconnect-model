@@ -1,4 +1,4 @@
-(defproject io.spinney/lambdaconnect-model "1.0.15"
+(defproject io.spinney/lambdaconnect-model "1.0.16"
   :description "Model parsing and scoping"
   :url "https://github.com/spinneyio/lambdaconnect-model"
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
@@ -9,7 +9,7 @@
                  [org.clojure/test.check "1.1.1"]
                  [org.clojure/math.combinatorics "0.0.7"]
                  [clj-time "0.15.2"]
-                 [com.taoensso/tufte "2.3.0"]]
+                 [com.taoensso/tufte "2.6.3"]]
   :main lambdaconnect-model.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all
@@ -18,4 +18,4 @@
              :test          [:project/dev :project/test]
              
              :project/test {:dependencies []}
-             :project/dev {:plugins [[com.jakemccrary/lein-test-refresh "0.24.1"]]}})
+             :project/dev {:plugins [[com.jakemccrary/lein-test-refresh "0.25.0"]]}})
