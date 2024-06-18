@@ -1,5 +1,6 @@
 (ns lambdaconnect-model.schema
-  (:require [lambdaconnect-model.tools :as t]))
+  (:require [lambdaconnect-model.tools :as t]
+            [lambdaconnect-model.utils :as u]))
 
 (defn- ident-schema-from-entity [entity]
   [{:db/ident (t/unique-datomic-identifier entity)
@@ -14,11 +15,11 @@
        (filter #(not (t/special-attribs (:name  %))))
        (map
         (fn [attribute]
-          (merge (if (= (:type attribute) :db.type/uuid) {:db/index true} {})
-                 {:db/ident (t/datomic-name attribute)
-                  :db/valueType (:type attribute)
-                  :db/cardinality :db.cardinality/one
-                  :db/doc "Core Data based attribute definition. Automatically generated based on Core Data model file."})))))
+          (u/merge (if (= (:type attribute) :db.type/uuid) {:db/index true} {})
+                   {:db/ident (t/datomic-name attribute)
+                    :db/valueType (:type attribute)
+                    :db/cardinality :db.cardinality/one
+                    :db/doc "Core Data based attribute definition. Automatically generated based on Core Data model file."})))))
 
 (defn- relationships-schema-from-entity [entity]
   (->> entity
@@ -45,4 +46,4 @@
   [entities]
   (->> entities
        vals
-       (t/mapcat schema-from-entity)))
+       (u/mapcat schema-from-entity)))

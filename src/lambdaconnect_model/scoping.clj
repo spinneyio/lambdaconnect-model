@@ -3,11 +3,11 @@
             [clojure.set :refer [subset? difference intersection union]]
             [taoensso.tufte :as profile]
             [clojure.spec.alpha :as s]
-            [lambdaconnect-model.utils :refer [relevant-tags]]
+            [lambdaconnect-model.tools :refer [relevant-tags] :as t]
+            [lambdaconnect-model.utils :as u]
             [clojure.pprint :refer [pprint]]
             [lambdaconnect-model.spec :as spec]
-            [clojure.string :as str]
-            [lambdaconnect-model.tools :as t]))
+            [clojure.string :as str]))
 
 ; ====================== RULE REORDERING FOR PERFORMANCE =========================
 
@@ -48,7 +48,7 @@
                  (= op 'or-join) (let [starting-dependencies (set (second rule))]
                                    `(~'or-join ~(second rule) ~@(map #(dive-deeper % starting-dependencies) (rest (rest rule)))))
                  :else rule)))]
-     (let [matching-rules (set (mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches))
+     (let [matching-rules (set (u/mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches))
            all-rule? (fn [rule]
                        (let [attr (second rule)]
                          (and (keyword? attr) (= "ident__" (name attr)))))
@@ -450,16 +450,15 @@
          scoping-definition (dissoc scoping-definition :constants)
          tags (or tags (set (keys scoping-definition)))
          necessary-tags (or necessary-tags (set (keys scoping-definition)))
-         relevant-rules (->> scoping-definition
-                             (filter (fn [[tag description]]
-                                       (and (:constraint description)
-                                            (or (not push?)
-                                                (-> description :permissions :create)
-                                                (-> description :permissions :modify)
-                                                (-> description :permissions :include-in-push))
-                                            (contains? necessary-tags tag))))
-                             (map (fn [[tag description]] [tag (:constraint description)]))
-                             (into {}))
+         relevant-rules (u/rebuild-map scoping-definition
+                                       (fn [tag description]
+                                         (when (and (:constraint description)
+                                                    (or (not push?)
+                                                        (-> description :permissions :create)
+                                                        (-> description :permissions :modify)
+                                                        (-> description :permissions :include-in-push))
+                                                    (contains? necessary-tags tag))
+                                           [tag (:constraint description)])))         
          queries (scoping-step
                   entities-by-name
                   {}
@@ -505,10 +504,10 @@
                                  clause
                                  (let [sym (first clause)]
                                    (case sym
-                                     (not or and) (concat [sym] (mapcat #(reverse-clauses [%]) (reverse (rest clause))))
+                                     (not or and) (concat [sym] (u/mapcat #(reverse-clauses [%]) (reverse (rest clause))))
                                      (not-join or-join) (concat [sym (second clause)] ;; variables bound by join
-                                                                (mapcat #(reverse-clauses [%]) (reverse (drop 2 clause)))))))])
-                            (reverse (mapcat #(reverse-clauses [%]) clauses))))
+                                                                (u/mapcat #(reverse-clauses [%]) (reverse (drop 2 clause)))))))])
+                            (reverse (u/mapcat #(reverse-clauses [%]) clauses))))
 
         bound-variable (fn bound-variable [clauses variable]
                          (if (= 1 (count clauses))
@@ -556,13 +555,13 @@
                                                         (conj bindings variable))]
                                          (concat [sym bindings]
                                                  (reduce (fn [clauses variable]
-                                                           (mapcat #(fix-variable-binding variable true [%]) clauses))
+                                                           (u/mapcat #(fix-variable-binding variable true [%]) clauses))
                                                          (drop 2 clause)
                                                          bindings)))
-                               or (concat [sym] (mapcat #(fix-variable-binding variable true [%]) clauses))
+                               or (concat [sym] (u/mapcat #(fix-variable-binding variable true [%]) clauses))
                                and (concat [sym] (fix-variable-binding variable false (rest clause)))
                                not clause)])))
-                      (let [clauses (mapcat #(validate-clause % variable) clauses)]
+                      (let [clauses (u/mapcat #(validate-clause % variable) clauses)]
                         (if (bound-variable clauses variable)
                           clauses
                           (concat clauses [(universal-binding variable)])))))]
@@ -629,9 +628,19 @@
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
   [scoped-entities]
-  (into {} (map (fn [[k l]] [k (reduce union (map second l))])
-                (group-by (fn [[k v]] (keyword (first (str/split (name k) #"\."))))
-                          (vec scoped-entities)))))
+  (->> scoped-entities
+       (group-by (fn [[k v]] (keyword (first (str/split (name k) #"\.")))))
+       (#(u/update-vals %
+                      (fn [_ l]
+                        (reduce union (map second l)))))))
+
+(defn inverse-entities
+  [map-to-inverse]
+  (->> map-to-inverse
+       (u/mapcat (fn [[tag ids]] 
+                   (map (fn [id] (list id tag)) ids)))
+       (group-by first)
+       (#(u/update-vals % (fn [_ tags] (set (map second tags)))))))
 
 (defn validate-pull-scope [entities-by-name edn]
   ;; This is a horrible way to validate grammar, but must suffice for now. Do not read or modify code below - it just works.
@@ -824,7 +833,7 @@
 
 (defn add-include-in-push-permission [edn]
   (let [all-constraints-tags (->> edn
-                                  (mapcat (fn [[tag description]]
+                                  (u/mapcat (fn [[tag description]]
                                             (referenced-tags-from-constraint description)))
                                   (into #{}))
         referenced-unchangeable-tags (->> edn

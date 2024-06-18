@@ -1,6 +1,6 @@
 (ns lambdaconnect-model.utils-test
   (:require [clojure.test :refer [deftest is]]
-            [lambdaconnect-model.utils :refer [relevant-tags]]))
+            [lambdaconnect-model.tools :refer [relevant-tags]]))
 
 (deftest relevant-tags-test
   (let [constraint-to-be-tested '(and

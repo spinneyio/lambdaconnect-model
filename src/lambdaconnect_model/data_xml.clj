@@ -3,7 +3,8 @@
             [clojure.algo.generic.functor :refer [fmap]]
             [clojure.spec.gen.alpha :as gen]
             [clojure.spec.alpha :as s]
-            [lambdaconnect-model.tools :as t]))
+            [lambdaconnect-model.tools :as t]
+            [lambdaconnect-model.utils :as u]))
 
 (defn regex? [r] (instance? java.util.regex.Pattern r))
 
@@ -39,8 +40,8 @@
 (s/def ::type (set (vals types-map)))
 
 (s/def ::default-value (s/nilable
-                        (apply (t/functionise s/or)
-                               (t/mapcat identity basic-validators))))
+                        (apply (u/functionise s/or)
+                               (u/mapcat identity basic-validators))))
 (s/def ::regular-expression (s/nilable :types/regex))
 (s/def ::max-value (s/nilable (s/or :db.type/long int? :db.type/instant inst?)))
 (s/def ::min-value (s/nilable (s/or :db.type/long int? :db.type/instant inst?)))
@@ -192,7 +193,7 @@
 (defn user-info-from-xml [xml]
   (->> xml
        (filter #(= :userInfo (:tag %)))
-       (mapcat #(->> % :content (map (comp (juxt :key :value) :attrs))))
+       (u/mapcat #(->> % :content (map (comp (juxt :key :value) :attrs))))
        (into {})))
 
 (s/fdef user-info-from-xml :ret ::user-info)
@@ -236,7 +237,7 @@
         pre-datomic (fmap first (group-by :name results))]
     (assert (reduce #(and %1 %2) (map (partial s/valid? ::entity) results)) (reduce str (map (partial s/explain-str ::entity) results)))
     (let [pairs (t/relationship-pairs pre-datomic)
-          relevant-relationships (t/mapcat t/relevant-relationship-from-pair pairs)
+          relevant-relationships (u/mapcat t/relevant-relationship-from-pair pairs)
           relevant-relationships-by-entity (group-by :entity-name relevant-relationships)
           full-entities (map #(assoc % :datomic-relationships
                                      (fmap first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]
