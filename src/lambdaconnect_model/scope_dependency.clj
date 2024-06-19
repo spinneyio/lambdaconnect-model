@@ -1,7 +1,7 @@
 (ns lambdaconnect-model.scope-dependency
   (:require [clojure.edn]
             [clojure.set :as set]
-            [lambdaconnect-model.utils :refer [relevant-tags]]))
+            [lambdaconnect-model.tools :refer [relevant-tags]]))
 
 (defn- DFS
   [cur-tag out visited call-stack]

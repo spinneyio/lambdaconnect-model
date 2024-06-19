@@ -2,6 +2,7 @@
   (:require [clojure.spec.alpha]
             [clojure.walk :as walk]
             [lambdaconnect-model.tools :as t]
+            [lambdaconnect-model.utils :as u]
             [lambdaconnect-model.data-xml :as xml]))
 
 (clojure.spec.alpha/def :app/uuid uuid?)
@@ -52,7 +53,7 @@
         max (if (:max-value rel) [:max-count (:max-value rel)] [])
         ref (concat [:app/relationship] min max)]
     (if (:to-many rel)
-      (apply (t/functionise clojure.spec.alpha/coll-of) ref)
+      (apply (u/functionise clojure.spec.alpha/coll-of) ref)
       (clojure.spec.alpha/nilable :app/relationship))))
 
 (defn spec-for-entity
@@ -66,7 +67,7 @@
       (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
+      ((u/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
   (let [all (concat (filter #(not (t/special-attribs (:name %))) (vals (:attributes entity)))
                     (vals (:relationships entity)))
         required (vec (concat
@@ -76,8 +77,8 @@
                         :app/updatedAt]
                        (map t/datomic-name (filter #(not (:optional %)) all))))
         optional (vec (map t/datomic-name (filter :optional all)))]
-    ((t/functionise clojure.spec.alpha/def) (keyword "lambdaconnect-model.spec.json" (:name entity))
-                                            ((t/functionise clojure.spec.alpha/keys)
+    ((u/functionise clojure.spec.alpha/def) (keyword "lambdaconnect-model.spec.json" (:name entity))
+                                            ((u/functionise clojure.spec.alpha/keys)
                                              :req required
                                              :opt optional))
     true))
@@ -93,7 +94,7 @@
       (eval final-validator-form)))
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
-      ((t/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
+      ((u/functionise clojure.spec.alpha/def) (t/datomic-name rel) val)))
   (let [all (concat (filter #(not (t/special-attribs (:name %)))
                             (vals (:datomic-relationships entity))))
         required (vec (concat
@@ -103,8 +104,8 @@
                         :app/updatedAt]
                        (map t/datomic-name (filter #(not (:optional %)) all))))
         optional (vec (map t/datomic-name (filter :optional all)))]
-    ((t/functionise clojure.spec.alpha/def) (keyword "lambdaconnect-model.spec.datomic" (:name entity))
-                                            ((t/functionise clojure.spec.alpha/keys)
+    ((u/functionise clojure.spec.alpha/def) (keyword "lambdaconnect-model.spec.datomic" (:name entity))
+                                            ((u/functionise clojure.spec.alpha/keys)
                                              :req required
                                              :opt optional))
     true))

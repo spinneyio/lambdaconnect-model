@@ -2,6 +2,7 @@
   (:require [clojure.string :as s]
             [clj-time.format :as time-format]
             [clj-time.coerce :as c]
+            [lambdaconnect-model.utils :as u]
             [clojure.spec.alpha :as spec]
             [clojure.set :refer [difference intersection]]))
 
@@ -11,9 +12,6 @@
 (def fake-attribs #{"syncRevision"})
 
 (def time-formatter (time-format/formatter :date-time)) ; ISO8601
-
-(defmacro functionise [macro]
-  `(fn [& args#] (eval (cons '~macro args#))))
 
 (defn unique-datomic-identifier [entity]
   (keyword (:name entity) "ident__"))
@@ -36,13 +34,6 @@
     (assert (or attr rel) (str "There is no attribute nor relationship named '" n "' for entity '" e "'"))
     (assert (not (and attr rel)) (str "There is a relationship AND an attribute named '" n "' for entity '" e "'"))
     (or attr rel)))
-
-(defn mapcat
-  ; We need our own implementation, see http://clojurian.blogspot.com/2012/11/beware-of-mapcat.html
-  ([f coll] (lambdaconnect-model.tools/mapcat f coll (lazy-seq [])))
-  ([f coll acc]
-   (if (empty? coll) acc
-       (recur f (rest coll) (lazy-seq (concat acc (f (first coll))))))))
 
 (defn to-database-date [date]
   (if (instance? java.util.Date date) date (c/to-date date)))
@@ -111,7 +102,7 @@
   "Generates a set of pairs of relationships"
   [e-by-name]
   (map #(sort-by :name (vec %))
-       (mapcat (fn [entity]
+       (u/mapcat (fn [entity]
                  (set
                   (map
                    (fn [rel]
@@ -145,3 +136,23 @@
      (= (select-keys o1 common-keys) (select-keys o2 common-keys))
      (reduce #(and %1 %2) true (map #(or (nil? (% o1)) (empty? (% o1))) (difference o1-keys o2-keys)))
      (reduce #(and %1 %2) true (map #(or (nil? (% o2)) (empty? (% o2))) (difference o2-keys o1-keys))))))
+
+(defn relevant-tags
+  "Takes a rule (e.g. [= :client :NOClient.me]) and
+   returns a set of all the tags included in the rule (in this case #{:NOClient.me}
+
+  Other example: (or (not [= :client :NOClient.me]) [= :uuid :NOClient.they/uuid]) -> #{:NOClient.me :NOClient.they}"
+  [rule] ; a single top-level rule taken from edn
+  (if (list? rule)
+    (let [op (first rule)]
+      (case op
+        'not (relevant-tags (second rule))
+        (reduce clojure.set/union #{} (map relevant-tags (rest rule)))))
+    (if-let [tag (when-not (#{:all :none} rule) (last rule))]
+      (if-not (keyword? tag)
+        #{}
+        (cond 
+          (= (namespace tag) "constant") #{}
+          (namespace tag) #{(keyword (namespace tag))}
+          :default #{tag}))
+      #{})))
