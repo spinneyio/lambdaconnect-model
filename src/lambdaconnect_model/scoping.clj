@@ -262,10 +262,12 @@
                                                         (concat ['and])
                                                         (reverse)
                                                         (into '())) 
+ 
                                                    top-level ignored-dependencies))))
                             (let [dependency-list (map nested-dependencies (map first internal-wheres))
                                   common-dependencies (reduce (if (= op 'and) union intersection) dependency-list)
-                                  final-wheres (map #(where-for-rule % false common-dependencies) (rest rule))
+                                  propagate-top-level (or top-level (and (#{'and 'or} op) (= (count (rest rule)) 1)))
+                                  final-wheres (map #(where-for-rule % propagate-top-level common-dependencies) (rest rule))
                                   internal-queries (reduce concat (map second final-wheres))
                                   particular-dependencies (map #(difference % common-dependencies ignored-dependencies) dependency-list)
                                   zipped (map vector (map second final-wheres) particular-dependencies)
@@ -299,12 +301,15 @@
                               ;;   (println "appended: " appended)
                               ;;   (println "----------------------------")
                               ;;    )
-
                               [common-dependencies (cond
                                                      (= op 'and) (if top-level
                                                                    appended
                                                                    `[(~'and ~@appended)])
-                                                     (= op 'or)  `[(~'or-join [~@dependent-entities] ~@appended)]
+                                                     (= op 'or)  (if (and top-level (<= (count appended) 1))
+                                                                   appended
+                                                                   (if (empty? dependent-entities)
+                                                                     `[(~'or ~@appended)]                                                                   
+                                                                     `[(~'or-join [~@dependent-entities] ~@appended)]))
                                                      (= op 'not) `[(~'not ~@internal-queries)])]))))
                       (let [value (second rule)                
 ;                            _ (println "RULE: " rule)
