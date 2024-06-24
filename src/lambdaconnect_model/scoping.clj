@@ -239,7 +239,7 @@
                                                    [#{} true])
                                                  (where-for-rule 
                                                   ;; This complex form filters only the subrules that do not have boolean value since this was dealt with earlier.
-                                                  (->> (map vector (rest rule) boolean-where-vals)
+                                                  (->> (map vector (rest rule) boolean-wheres)
                                                        (filter (comp not second)) 
                                                        (map first)
                                                        (vec)
@@ -266,7 +266,7 @@
                                                    top-level ignored-dependencies))))
                             (let [dependency-list (map nested-dependencies (map first internal-wheres))
                                   common-dependencies (reduce (if (= op 'and) union intersection) dependency-list)
-                                  propagate-top-level (or top-level (and (#{'and 'or} op) (= (count (rest rule)) 1)))
+                                  propagate-top-level (or top-level (and (#{'and 'or} op) (<= (count (rest rule)) 1)))
                                   final-wheres (map #(where-for-rule % propagate-top-level common-dependencies) (rest rule))
                                   internal-queries (reduce concat (map second final-wheres))
                                   particular-dependencies (map #(difference % common-dependencies ignored-dependencies) dependency-list)
