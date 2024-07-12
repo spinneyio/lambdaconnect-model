@@ -13,7 +13,7 @@
 (clojure.spec.alpha/def :app/relationship (clojure.spec.alpha/keys :req [:app/uuid]))
 
 (defn- validator-form-for-attribute [attr]
-   (let [basic (xml/basic-validator-symbols (:type attr))
+   (let [basic (xml/basic-validators (:type attr))
          advanced (concat [basic]
                          (filter identity
                                  (case (:type attr)
