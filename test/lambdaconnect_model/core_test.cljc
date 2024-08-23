@@ -1,17 +1,17 @@
 (ns lambdaconnect-model.core-test
-  (:require #?@(:clj [[clojure.test :refer [deftest is testing]]
-                      [clojure.spec.alpha :as s]
-                      [lambdaconnect-model.core :as mp]
-                      [lambdaconnect-model.tools :as mpt]
-                      [clojure.data.json :refer [read-str]]
-                      [clojure.spec.gen.alpha :as gen]]
-                :cljs [[cljs.test :refer [deftest is testing]]
-                       [cljs.spec.alpha :as s]
-                       [lambdaconnect-model.core :as mp]
-                       [lambdaconnect-model.tools :as mpt]                      
-                       [cljs.spec.gen.alpha :as gen]
-                       [shadow.resource :as rc]
-                       [clojure.test.check.generators]])))
+  (:require 
+   [lambdaconnect-model.core :as mp]
+   [lambdaconnect-model.tools :as mpt]
+   
+   #?@(:clj [[clojure.test :refer [deftest is testing]]
+             [clojure.spec.alpha :as s]
+             [clojure.data.json :refer [read-str]]
+             [clojure.spec.gen.alpha :as gen]]
+       :cljs [[cljs.test :refer [deftest is testing]]
+              [cljs.spec.alpha :as s]
+              [cljs.spec.gen.alpha :as gen]
+              [shadow.resource :as rc]
+              [clojure.test.check.generators]])))
   
 (deftest test-core-data-xml-conversion
   (testing "Reading model file one"
