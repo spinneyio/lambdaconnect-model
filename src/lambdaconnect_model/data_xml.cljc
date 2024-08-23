@@ -236,7 +236,7 @@
   (assert (= :entity (:tag xml)))
   (let [name (-> xml :attrs :name)
         parse-elements (fn [f type]
-                         (u/fmap first
+                         (u/map-keys first
                                (group-by :name
                                          (map
                                           (comp (partial apply f name)
@@ -265,7 +265,7 @@
                      :content
                      (filter #(= :entity (:tag %)))
                      (map entity-from-xml))
-        pre-datomic (u/fmap first (group-by :name results))]
+        pre-datomic (u/map-keys first (group-by :name results))]
     (assert (reduce #(and %1 %2) 
                     (map (partial s/valid? ::entity) results)) 
             (reduce str (map (partial s/explain-str ::entity) results)))
@@ -273,7 +273,7 @@
           relevant-relationships (u/mapcat t/relevant-relationship-from-pair pairs)
           relevant-relationships-by-entity (group-by :entity-name relevant-relationships)
           full-entities (map #(assoc % :datomic-relationships
-                                     (u/fmap first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]
+                                     (u/map-keys first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]
       (assert (reduce #(and %1 %2) (map (partial s/valid? ::entity) full-entities)) (reduce str (map (partial s/explain-str ::entity) full-entities)))
-      (u/fmap first (group-by :name full-entities)))))
+      (u/map-keys first (group-by :name full-entities)))))
 

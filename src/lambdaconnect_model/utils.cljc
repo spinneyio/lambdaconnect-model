@@ -10,7 +10,7 @@
    (defmacro defspec [k spec-form]
      `(s/def-impl ~k (quote ~spec-form) ~spec-form)))
 
-(defn fmap [f m] 
+(defn map-keys [f m] 
   (persistent!
    (reduce (fn [res [k v]] 
              (assoc! res k (f v))) 
