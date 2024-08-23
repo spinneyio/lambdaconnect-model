@@ -73,11 +73,11 @@
                                 (vec (sort comparator (distinct (concat result (map #(dive-deeper % nil) rules))))))]
        (cond
          (= (count matching-rules) (count remaining-rules)) (get-ordered-result matching-rules)
-         (seq matching-rules) (recur (filter (comp not matching-rules-set) remaining-rules)
+         (seq matching-rules) (recur (remove matching-rules-set remaining-rules)
                                      (get-ordered-result matching-rules)
                                      (difference (reduce union #{} (map set (map s-dependencies matching-rules))) next-matches)
                                      final-tags)
-         (seq all-rules)  (recur (filter (comp not all-rules) remaining-rules)
+         (seq all-rules)  (recur (remove all-rules remaining-rules)
                                  (get-ordered-result all-rules)
                                  (difference (reduce union #{} (map set (map s-dependencies all-rules))) next-matches)
                                  final-tags)
@@ -237,7 +237,7 @@
                                                  (where-for-rule 
                                                   ;; This complex form filters only the subrules that do not have boolean value since this was dealt with earlier.
                                                   (->> (map vector (rest rule) boolean-wheres)
-                                                       (filter (comp not second)) 
+                                                       (remove second) 
                                                        (map first)
                                                        (vec)
                                                        (concat ['or])
@@ -253,7 +253,7 @@
                                                   (where-for-rule 
                                                    ;; This complex form filters only the subrules that do not have boolean value since this was dealt with earlier.
                                                    (->> (map vector (rest rule) boolean-wheres)
-                                                        (filter (comp not second)) 
+                                                        (remove second) 
                                                         (map first)
                                                         (vec)
                                                         (concat ['and])
