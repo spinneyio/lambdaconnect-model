@@ -4,7 +4,7 @@
       :cljs [cljs.spec.alpha :as s])
    [clojure.set :refer [union]]))
 
-(def pmap #?(:clj pmap :cljs map))
+(def pmap #?(:clj clojure.core/pmap :cljs clojure.core/map))
 
 #?(:clj 
    (defmacro defspec [k spec-form]
