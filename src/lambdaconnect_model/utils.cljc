@@ -1,8 +1,38 @@
 (ns lambdaconnect-model.utils
-  (:require [clojure.set :refer [union]]))
+  (:require 
+   #?(:clj [clojure.spec.alpha :as s] 
+      :cljs [cljs.spec.alpha :as s])
+   [clojure.set :refer [union]]))
 
-(defmacro functionise [macro]
-  `(fn [& args#] (eval (cons '~macro args#))))
+(def pmap #?(:clj clojure.core/pmap :cljs clojure.core/map))
+
+#?(:clj 
+   (defmacro defspec [k spec-form]
+     `(s/def-impl ~k (quote ~spec-form) ~spec-form)))
+
+(defn map-keys [f m] 
+  (persistent!
+   (reduce (fn [res [k v]] 
+             (assoc! res k (f v))) 
+           (transient {})
+           m)))
+
+(defn keys [& {:keys [req opt]}]
+  (let [pred-exprs (concat [(fn [m] (map? m))]
+                           (map (fn [r] #(contains? % r)) req))]
+    (s/map-spec-impl
+     {:req-un 'nil,
+      :opt-un 'nil,
+      :gfn nil
+      :pred-exprs pred-exprs
+      :keys-pred (fn [m] (reduce #(and %1 %2) true (map #(% m) pred-exprs)))
+      :opt-keys opt
+      :req-specs req
+      :req req
+      :req-keys req 
+      :opt-specs opt
+      :pred-forms []
+      :opt opt})))
 
 (defn mapcat
   ; We need our own implementation, see http://clojurian.blogspot.com/2012/11/beware-of-mapcat.html
@@ -23,9 +53,10 @@
   (with-meta
     (persistent!
      (reduce-kv (fn [acc k v] (assoc! acc k (f k v)))
-                (if (instance? clojure.lang.IEditableCollection m)
-                  (transient m)
-                  (transient {}))
+                #?(:clj (if (instance? clojure.lang.IEditableCollection m)
+                          (transient m)
+                          (transient {}))
+                   :cljs (transient {}))
                 m))
     (meta m)))
 

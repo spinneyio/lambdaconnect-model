@@ -1,13 +1,17 @@
 (ns lambdaconnect-model.scope-dependency-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require #?(:clj [clojure.test :refer [deftest is testing]]
+               :cljs [cljs.test :refer [deftest is testing]])
+            #?(:cljs [shadow.resource :as rc])
             [lambdaconnect-model.core :as mp]
             [lambdaconnect-model.scope-dependency :as scp-dep]))
 
-
-(mp/specs (mp/entities-by-name "env/test/test-model-2.xml"))
+(def ebn (mp/entities-by-name #?(:cljs (rc/inline "./fixtures/test-model-2.xml")
+                                 :clj "test/lambdaconnect_model/fixtures/test-model-2.xml")))
+(mp/specs ebn)
 (def scoping-example (mp/read-pull-scoping-edn
-                      "env/test/test-scope.edn"
-                      (mp/entities-by-name "env/test/test-model-2.xml")))
+                      #?(:cljs (rc/inline "./fixtures/test-scope.edn")
+                         :clj "test/lambdaconnect_model/fixtures/test-scope.edn")
+                      ebn))
 
 (deftest dependency-tree
   (testing "buidling dependency tree"

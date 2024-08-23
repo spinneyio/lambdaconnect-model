@@ -1,12 +1,15 @@
 (ns lambdaconnect-model.data-xml
-  (:require [clojure.xml]
-            [clojure.algo.generic.functor :refer [fmap]]
+  (:require [clojure.data.xml]            
             [clojure.spec.gen.alpha :as gen]
-            [clojure.spec.alpha :as s]
+            #?(:clj [clojure.spec.alpha :as s] 
+               :cljs [cljs.spec.alpha :as s])
             [lambdaconnect-model.tools :as t]
-            [lambdaconnect-model.utils :as u]))
+            [lambdaconnect-model.utils :as u]
+            [clojure.math :refer [round]]))
 
-(defn regex? [r] (instance? java.util.regex.Pattern r))
+
+(defn regex? [r] (instance? #?(:clj java.util.regex.Pattern 
+                               :cljs js/RegExp) r))
 
 (s/def :types/regex
   (s/with-gen regex?
@@ -24,8 +27,20 @@
                 "UUID"       :db.type/uuid
                 "URI"        :db.type/string})
 
+;; Bytes are held as strings in javascript
+#?(:cljs (def bytes? string?))
+
+
+;; Default inst? generator causes problems in cljs as it often generates large negative integers that produce dates cljs-time cannot process
+#?(:clj (s/def :types/inst inst?)
+   :cljs (s/def :types/inst (s/with-gen inst?
+                              (fn [] (gen/fmap #(js/Date. %)
+                                               ;; 2124
+                                               (gen/large-integer* {:min 0 :max 4879988866000}))))))
+
+
 (def basic-validators {:db.type/string string?
-                       :db.type/instant inst?
+                       :db.type/instant :types/inst
                        :db.type/boolean boolean?
                        :db.type/long int?
                        :db.type/uuid uuid?
@@ -37,12 +52,19 @@
 (s/def ::entity-name string?)
 (s/def ::type (set (vals types-map)))
 
-(eval `(s/def ::default-value (s/nilable
-                               (s/or
-                               ~@(u/mapcat identity basic-validators)))))
+(s/def ::default-value 
+ (s/nilable (s/or :db.type/string string?
+                  :db.type/instant :types/inst
+                  :db.type/boolean boolean?
+                  :db.type/long int?
+                  :db.type/uuid uuid?
+                  :db.type/double double?
+                  :db.type/float float?
+                  :db.type/bytes bytes?)))
+
 (s/def ::regular-expression (s/nilable :types/regex))
-(s/def ::max-value (s/nilable (s/or :db.type/long int? :db.type/instant inst?)))
-(s/def ::min-value (s/nilable (s/or :db.type/long int? :db.type/instant inst?)))
+(s/def ::max-value (s/nilable (s/or :db.type/long int? :db.type/instant :types/inst)))
+(s/def ::min-value (s/nilable (s/or :db.type/long int? :db.type/instant :types/inst)))
 (s/def ::optional boolean?)
 (s/def ::indexed boolean?)
 (s/def ::user-info (s/nilable (s/map-of string? string?)))
@@ -127,12 +149,19 @@
 (defn ->date
   "Apple uses seconds since 1.1.2001, we have to add the epoch timestamp of this date"
   [val]
-  (when val (java.util.Date. (* 1000 (+ 978307200 (Integer. val))))))
+  (when val (#?(:clj java.util.Date. 
+                :cljs js/Date.) 
+             (* 1000 (+ 978307200 (parse-long val))))))
 (defn ->type  [val] (get types-map val))
 (defn ->regex [val] (when val (re-pattern val)))
-(defn ->dbl   [val] (when val (Double. val)))
-(defn ->float [val] (when val (Float. val)))
-(defn ->int   [val] (when val (try (Integer. val) (catch Throwable _ (Math/round (->float val))))))
+(defn ->dbl   [val] (when val (let [parsed (parse-double val)] 
+                                (assert parsed (str "Unknown value for double: " val))
+                                parsed)))
+(defn ->float [val] (when val (let [parsed (parse-double val)] 
+                                (assert parsed (str "Unknown value for float: " val))
+                                parsed)))
+(defn ->int   [val] (when val (let [parsed (parse-long val)] 
+                                (or parsed (round (->float val))))))
 
 (defn ->value [val type]
   (when val
@@ -189,10 +218,15 @@
 (s/fdef relationship-from-xml :ret ::relationship)
 
 (defn user-info-from-xml [xml]
-  (->> xml
-       (filter #(= :userInfo (:tag %)))
-       (u/mapcat #(->> % :content (map (comp (juxt :key :value) :attrs))))
-       (into {})))
+  (let [retval (->> xml
+                    (filter #(= :userInfo (:tag %)))
+                    (u/mapcat #(->> % 
+                                    :content 
+                                    (map :attrs)
+                                    (filter identity) ;; In clojurescript parsed xml there might be nil args
+                                    (map (juxt :key :value))))
+                    (into {}))]
+    retval))
 
 (s/fdef user-info-from-xml :ret ::user-info)
 
@@ -202,7 +236,7 @@
   (assert (= :entity (:tag xml)))
   (let [name (-> xml :attrs :name)
         parse-elements (fn [f type]
-                         (fmap first
+                         (u/map-keys first
                                (group-by :name
                                          (map
                                           (comp (partial apply f name)
@@ -224,21 +258,22 @@
 
 ; ------------- READING --------------
 
+
 (defn entities-by-name [xml]
   (let [results (->> xml
-                     (.getBytes)
-                     (java.io.ByteArrayInputStream.)
-                     clojure.xml/parse
+                     clojure.data.xml/parse-str
                      :content
                      (filter #(= :entity (:tag %)))
                      (map entity-from-xml))
-        pre-datomic (fmap first (group-by :name results))]
-    (assert (reduce #(and %1 %2) (map (partial s/valid? ::entity) results)) (reduce str (map (partial s/explain-str ::entity) results)))
+        pre-datomic (u/map-keys first (group-by :name results))]
+    (assert (reduce #(and %1 %2) 
+                    (map (partial s/valid? ::entity) results)) 
+            (reduce str (map (partial s/explain-str ::entity) results)))
     (let [pairs (t/relationship-pairs pre-datomic)
           relevant-relationships (u/mapcat t/relevant-relationship-from-pair pairs)
           relevant-relationships-by-entity (group-by :entity-name relevant-relationships)
           full-entities (map #(assoc % :datomic-relationships
-                                     (fmap first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]
+                                     (u/map-keys first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]
       (assert (reduce #(and %1 %2) (map (partial s/valid? ::entity) full-entities)) (reduce str (map (partial s/explain-str ::entity) full-entities)))
-      (fmap first (group-by :name full-entities)))))
+      (u/map-keys first (group-by :name full-entities)))))
 

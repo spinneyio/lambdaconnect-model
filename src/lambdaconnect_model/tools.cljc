@@ -1,9 +1,13 @@
 (ns lambdaconnect-model.tools
-  (:require [clojure.string :as s]
-            [clj-time.format :as time-format]
-            [clj-time.coerce :as c]
+  (:require #?@(:clj [[clj-time.format :as time-format]
+                      [clj-time.coerce :as c]
+                      [clojure.spec.alpha :as spec]]
+                :cljs [[cljs-time.format :as time-format]
+                       [cljs-time.coerce :as c]
+                       [cljs.spec.alpha :as spec]])            
+
+            [clojure.string :as s]
             [lambdaconnect-model.utils :as u]
-            [clojure.spec.alpha :as spec]
             [clojure.set :refer [difference intersection]]))
 
 ; Those fileds are excluded from automatic schema generation as they all have "app" prefix and are common for all the objects
@@ -11,7 +15,7 @@
 (def special-unmodifiable-attribs (difference special-attribs #{"active"}))
 (def fake-attribs #{"syncRevision"})
 
-(def time-formatter (time-format/formatter :date-time)) ; ISO8601
+(def time-formatter (time-format/formatters :date-time)) ; ISO8601
 
 (defn unique-datomic-identifier [entity]
   (keyword (:name entity) "ident__"))
@@ -36,14 +40,18 @@
     (or attr rel)))
 
 (defn to-database-date [date]
-  (if (instance? java.util.Date date) date (c/to-date date)))
+  (if (instance? #?(:clj java.util.Date
+                    :cljs js/Date) date) 
+    date (c/to-date date)))
+
 
 (defn string->uuid
   [s]
   (if (uuid? s) s
       (do
         (assert (string? s) (str "Not a string passed as a UUID: " s))
-        (. java.util.UUID fromString s))))
+        #?(:clj (. java.util.UUID fromString s)
+           :cljs (uuid s)))))
 
 ; ================================================
 
@@ -54,9 +62,10 @@
     string->uuid
     (case (:type attribute)
       :db.type/uuid string->uuid
-      :db.type/instant #(when (not (nil? %)) (->> %
-                                                  (time-format/parse time-formatter)
-                                                  (to-database-date)))
+      :db.type/instant #(when (not (nil? %)) 
+                          (->> %                                                  
+                               (time-format/parse time-formatter)
+                               (to-database-date)))
       :db.type/boolean #(when (not (nil? %)) (if-not (= false %)
                                                (or (= % true) (> % 0))
                                                false))

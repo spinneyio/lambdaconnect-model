@@ -11,7 +11,7 @@
                          (if (not (contains? cur-visited child))
                            (DFS child out cur-visited cur-call-stack)
                            (when (contains? call-stack child)
-                             (throw (Exception. (str "Cycle deteced, back edge from: " cur-tag " to: " child))))))]
+                             (throw (#?(:clj Exception. :cljs js/Error.) (str "Cycle deteced, back edge from: " cur-tag " to: " child))))))]
     (reduce (fn [cur-paths new-path] (merge-with set/union cur-paths new-path))
             {cur-tag call-stack} children-paths)))
 

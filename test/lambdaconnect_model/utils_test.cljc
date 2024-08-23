@@ -1,5 +1,6 @@
 (ns lambdaconnect-model.utils-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require #?(:clj [clojure.test :refer [deftest is]]
+               :cljs [cljs.test :refer [deftest is]])
             [lambdaconnect-model.tools :refer [relevant-tags]]))
 
 (deftest relevant-tags-test
