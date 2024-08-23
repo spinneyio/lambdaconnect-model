@@ -1,8 +1,8 @@
 (ns lambdaconnect-model.scoping
   (:require [clojure.edn]
             [clojure.set :refer [subset? difference intersection union]]
-            [taoensso.tufte :as profile]
-            [clojure.spec.alpha :as s]
+            #?(:clj [clojure.spec.alpha :as s] 
+               :cljs [cljs.spec.alpha :as s])
             [lambdaconnect-model.tools :refer [relevant-tags] :as t]
             [lambdaconnect-model.utils :as u]
             [clojure.pprint :refer [pprint]]
@@ -36,51 +36,48 @@
 
 (defn reorder-rules
   ([remaining-rules final-tags]
-   (reorder-rules (set remaining-rules) [] #{'?user} final-tags))
+   (reorder-rules remaining-rules [] #{'?user} final-tags))
   ([remaining-rules result next-matches final-tags]
    (assert (vector? result))
-   (assert (set? remaining-rules))
+   (assert (sequential? remaining-rules))
    (letfn [(dive-deeper [rule overlaying-dependencies]
              (let [op (first rule)]
                (cond
                  (= op 'not) (list 'not (dive-deeper (second rule) overlaying-dependencies))
-                 (= op 'and) `(~'and ~@(reorder-rules (set (rest rule)) [] (difference overlaying-dependencies final-tags) final-tags))
-                 (= op 'or-join) (let [starting-dependencies (set (second rule))]
+                 (= op 'and) `(~'and ~@(reorder-rules (rest rule) [] (difference (set overlaying-dependencies) final-tags) final-tags))
+                 (= op 'or-join) (let [starting-dependencies (second rule)]
                                    `(~'or-join ~(second rule) ~@(map #(dive-deeper % starting-dependencies) (rest (rest rule)))))
                  :else rule)))]
-     (let [matching-rules (set (u/mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches))
+     (let [matching-rules (u/mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches)
+           matching-rules-set (set matching-rules)
            all-rule? (fn [rule]
                        (let [attr (second rule)]
                          (and (keyword? attr) (= "ident__" (name attr)))))
            all-rules (set (filter all-rule? remaining-rules))
 
            comparator (fn [a b]
-                        (let [goes-up? (fn [r]
-                                         (or ; we manually bubble up queries that seem to need priority
-                                          (and (s-matches? '?user r)
-                                               (not (seq? r)))
-                                          (and (keyword? (second r))
-                                               (= (name (second r)) "internalUserId"))
-                                          (seq? (first r))))]
-                          (if (and (goes-up? a)
-                                   (goes-up? b))
-                            (if (s-matches? '?user a)
-                              -1
-                              1)
-                            (cond (goes-up? a) -1
-                                  (goes-up? b) 1
-                                  :else 0))))
-           get-ordered-result (fn [rules] (vec (sort comparator (concat result (vec (map #(dive-deeper % nil) rules))))))]
-       ;; (println "MATCHING: " matching-rules)
-       ;; (println "REMAINING: " remaining-rules)
-       ;; (println "MATCHES: " next-matches)
+                        (let [goes-up? (memoize 
+                                        (fn [r]
+                                          (or ; we manually bubble up queries that seem to need priority
+                                           (and (s-matches? '?user r)
+                                                (not (seq? r)))
+                                           (and (keyword? (second r))
+                                                (= (name (second r)) "internalUserId"))
+                                           (seq? (first r)))))]
+                          (cond 
+                            (and (goes-up? a) (goes-up? b)) (if (s-matches? '?user a) -1 1)
+                            (goes-up? a) -1
+                            (goes-up? b) 1
+                            :else 0)))
+           get-ordered-result (fn [rules] 
+                                (vec (sort comparator (distinct (concat result (map #(dive-deeper % nil) rules))))))]
        (cond
          (= (count matching-rules) (count remaining-rules)) (get-ordered-result matching-rules)
-         (seq matching-rules) (recur (difference remaining-rules matching-rules)
+         (seq matching-rules) (recur (filter (comp not matching-rules-set) remaining-rules)
                                      (get-ordered-result matching-rules)
                                      (difference (reduce union #{} (map set (map s-dependencies matching-rules))) next-matches)
                                      final-tags)
-         (seq all-rules)  (recur (difference remaining-rules all-rules)
+         (seq all-rules)  (recur (filter (comp not all-rules) remaining-rules)
                                  (get-ordered-result all-rules)
                                  (difference (reduce union #{} (map set (map s-dependencies all-rules))) next-matches)
                                  final-tags)
@@ -94,7 +91,7 @@
 
 (defn execute-query-generic [config tag query]
 ;  (println "Trying to execute query: " query)
-  (let [res (profile/p tag (->> query (apply (:q config)) (mapv first) set))]
+  (let [res (->> query (apply (:q config)) (mapv first) set)]
  ;   (println "COMPUTED:" res)
     [tag res]))
 
@@ -113,13 +110,13 @@
         ;; (println "QUERY:" )
         ;; (pprint query)
         ;; (println "--------------")
-      [tag (profile/p tag (set (or (apply (:q config) query) #{})))]
+      [tag (set (or (apply (:q config) query) #{}))]
       (let [special-clause (first or-join-clauses)
-            remaining-clauses (set (filter #(not= % special-clause) where-clauses))
+            remaining-clauses (filter #(not= % special-clause) where-clauses)
             subsections (drop 2 special-clause)
-            results (pmap (fn [subclause]
-                            (let [subquery (if (and (seq? subclause) (= 'and (first subclause))) (set (rest subclause)) #{subclause})]
-                              (second (execute-query-split config tag [(concat beginning [:where] (reorder-rules (union remaining-clauses subquery) #{entity-symbol})) snapshot entry-set])))) subsections)]
+            results (u/pmap (fn [subclause]
+                              (let [subquery (if (and (seq? subclause) (= 'and (first subclause))) (rest subclause) [subclause])]
+                              (second (execute-query-split config tag [(concat beginning [:where] (reorder-rules (concat remaining-clauses subquery) #{entity-symbol})) snapshot entry-set false])))) subsections)]
         [tag (reduce union results)]))))
 
 ; I have found that the performance gap was caused by the lack of ?user in the or join. No need for splitting anymore, but leaving the method for reference.
@@ -151,7 +148,7 @@
         symbol-for-tag #(when (keyword? %) (symbol (str "?" (reduce (fn [s1 s2] (str s1 "-" s2)) (str/split (or (namespace %) (name %)) #"\.")))))
         entity (get-entity tag)
         entity-symbol (symbol-for-tag tag)]
-
+    
     (letfn [(nested-dependencies [dependencies]
               ; for a set of dependencies (e.g. #{ :NODietitian.me } ) produces a set that contains all the dependencies (e.g. #{ :NODietitian.me :NOUser.me :user } )
               (if (empty? dependencies) #{}
@@ -273,7 +270,7 @@
                                   zipped (map vector (map second final-wheres) particular-dependencies)
                                   dependent-entities-from-common (union #{'?user entity-symbol} (set (map symbol-for-tag common-dependencies)))
                                   appended (reduce concat (map (fn [[where dep]]
-                                                                 (let [rules (reorder-rules (set (dependent-rules dep common-dependencies where)) #{entity-symbol})]
+                                                                 (let [rules (reorder-rules  (dependent-rules dep common-dependencies where) #{entity-symbol})]
                                                                    (if (and (> (count rules) 1) (= op 'or)) [`(~'and ~@rules)] rules))) zipped))
                                   used-entities (reduce union (map (fn [[where dep]] (find-all-symbols (dependent-rules dep common-dependencies where))) zipped))
                                   dependent-entities (intersection dependent-entities-from-common used-entities)
@@ -373,8 +370,7 @@
                                  [(~op ~g2 ~g1)]])))]))))))]
       (let [[dependencies rules] (where-for-rule rule true #{})
             additional-rules (reverse (dependent-rules dependencies))
-            full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol})) ;(concat additional-rules rules)
-            ]
+            full-rules  (vec (reorder-rules (concat additional-rules rules) #{entity-symbol}))]
         [`[:find ~entity-symbol :in ~'$ [~'?user ...] :where ~@full-rules]
          rules
          dependencies]))))
@@ -474,107 +470,6 @@
          filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) queries))]
      filtered-queries)))
 
-(defn reverse-scoping-query
-  "Input:
-   Single scoping query (one value of map returned by get-scoping-queries)
-   This query efficiently answers question \"As a user, which entities can I access?\".
-   Example input:
-   [:find ?RAEmployee-ofOwner
-    :in $ [?user ...]
-    :where
-    [?user :app/uuid ?G__33024]
-    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
-    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]
-
-   Output:
-   Single scoping query.
-   This query efficiently answers question \"Which users can access this entity?\".
-   Example output:
-   [:find ?user
-    :in $ [?RAEmployee-ofOwner ...]
-    :where
-    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]
-    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
-    [?user :app/uuid ?G__33024]]"
-  [scoping-rule]
-  (let [[find entity-variable
-         in $ [user-variable dots]
-         where & query-body] scoping-rule
-        new-rule-header [find user-variable in $ [entity-variable dots] where]
-
-        reverse-clauses (fn reverse-clauses [clauses]
-                          (if (= 1 (count clauses))
-                            (let [clause (first clauses)]
-                              [(if (vector? clause)
-                                 clause
-                                 (let [sym (first clause)]
-                                   (case sym
-                                     (not or and) (concat [sym] (u/mapcat #(reverse-clauses [%]) (reverse (rest clause))))
-                                     (not-join or-join) (concat [sym (second clause)] ;; variables bound by join
-                                                                (u/mapcat #(reverse-clauses [%]) (reverse (drop 2 clause)))))))])
-                            (reverse (u/mapcat #(reverse-clauses [%]) clauses))))
-
-        bound-variable (fn bound-variable [clauses variable]
-                         (if (= 1 (count clauses))
-                           (let [clause (first clauses)]
-                             (if (vector? clause)
-                               (some #(= variable %) clause)
-                               (let [sym (first clause)]
-                                 (case sym
-                                   (not-join or-join) (some #(= variable %) (second clause))
-                                   or (every? #(bound-variable [%] variable) (rest clause))
-                                   and (some #(bound-variable [%] variable) (rest clause))
-                                   false))))
-                           (some #(bound-variable [%] variable) clauses)))
-
-        universal-binding (fn [sym]
-                            [sym (if (= sym user-variable)
-                                   :user/username
-                                   (-> sym str (str/split #"-") first (subs 1) (keyword "ident__")))])
-
-        reversed-query-body
-        (condp = query-body
-          [(universal-binding entity-variable)] [(universal-binding user-variable)]
-          (none-rules user-variable entity-variable) (none-rules entity-variable user-variable)
-          (letfn [(validate-clause
-                    [clause variable]
-                    (if (vector? clause)
-                      [clause]
-                      (fix-variable-binding variable false [clause])))
-                  (fix-variable-binding
-                    [variable requires-and clauses]
-                    (if (= 1 (count clauses))
-                      (let [clause (first clauses)]
-                        (if (vector? clause)
-                          (if (bound-variable clauses variable)
-                            clauses
-                            (if requires-and
-                              [(list 'and clause (universal-binding variable))]
-                              [clause (universal-binding variable)]))
-                          (let [sym (first clause)]
-                            [(case sym
-                               not-join (concat (take 2 clause) (fix-variable-binding variable false (drop 2 clause)))
-                               or-join (let [bindings (second clause)
-                                             bindings (if (seq (filter #(= % variable) bindings))
-                                                        bindings
-                                                        (conj bindings variable))]
-                                         (concat [sym bindings]
-                                                 (reduce (fn [clauses variable]
-                                                           (u/mapcat #(fix-variable-binding variable true [%]) clauses))
-                                                         (drop 2 clause)
-                                                         bindings)))
-                               or (concat [sym] (u/mapcat #(fix-variable-binding variable true [%]) clauses))
-                               and (concat [sym] (fix-variable-binding variable false (rest clause)))
-                               not clause)])))
-                      (let [clauses (u/mapcat #(validate-clause % variable) clauses)]
-                        (if (bound-variable clauses variable)
-                          clauses
-                          (concat clauses [(universal-binding variable)])))))]
-            (->> query-body
-                 reverse-clauses
-                 (fix-variable-binding user-variable false))))]
-    (into new-rule-header reversed-query-body)))
-
 (defn scope-selected-tags-with-tree
   "Takes:
    a snapshot,
@@ -604,7 +499,7 @@
                                (map (fn [[tag query]] [tag [query snapshot #{(:db/id user)}]]))
                                (into {}))]
     (->> completed-queries
-         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (u/pmap (fn [x] (apply (partial execute-query config) x)))
          (into {}))))
 
 (defn scope
@@ -627,9 +522,9 @@
                                (into {}))
         filtered-queries (into {} (filter (fn [[tag _]] (contains? tags tag)) completed-queries))]
     (->> filtered-queries
-         (pmap (fn [x] (apply (partial execute-query config) x)))
+         (u/pmap (fn [x] (apply (partial execute-query config) x)))
          (into {})))))
-
+ 
 (defn reduce-entities
   "Takes what 'scope' produces and aggregates all the entity types (so :NOUser.me and :NOUser.peer become :NOUser with unified ids)"
   [scoped-entities]
@@ -736,8 +631,8 @@
 
           (validate-replacement [tag entity attribute-name replacement-attribute-name]
             (let [attribute (get (:attributes entity) attribute-name)
-                  replacement-attribute (get (:attributes entity) (if (keyword? replacement-attribute-name)
-                                                                    (name (replacement-attribute-name))
+                  replacement-attribute (get (:attributes entity) (if (keyword? replacement-attribute-name) 
+                                                                    (name replacement-attribute-name)
                                                                     replacement-attribute-name))]
               (assert (and attribute replacement-attribute) (str "One of attributes: #{" attribute-name ", " replacement-attribute-name "} not found on entity " (:name entity)))
               (assert (= (:type attribute) (:type replacement-attribute)) (str "Types do not match for replacement: " attribute-name " with " replacement-attribute-name))
@@ -754,8 +649,10 @@
             (let [attribute (get (:attributes entity) attribute-name)
                   parsed (when (not (constant? value)) 
                            (try 
-                             ((t/parser-for-attribute attribute) value)
-                             (catch Exception _ (assert false (str "Wrong value: " value " for attribute: " attribute-name)))))]
+                             ((t/parser-for-attribute attribute) value) 
+                             (catch #?(:clj Exception :cljs js/Error) _ (assert false (str "Wrong value: " value " for attribute: " attribute-name)))
+                             
+                             ))]
               (assert attribute (str "Entity: " tag " doesn't have the attribute: " attribute-name))
               (assert (or (:optional attribute) (not (nil? value))) (str "Non-optional attribute " (:name attribute) " has nil value for tag: " tag))
               (when-not (constant? value)                
@@ -852,7 +749,15 @@
         include-in-push (fn [edn tag] (assoc-in edn [tag :permissions :include-in-push] true))]
     (reduce include-in-push edn referenced-unchangeable-tags)))
 
-(defn read-pull-scoping-edn [path entities-by-name]
-  (let [edn (clojure.edn/read-string (slurp path))]
-    (validate-pull-scope entities-by-name edn)
-    (add-include-in-push-permission edn)))
+
+#?(:clj 
+   (defn read-pull-scoping-edn [path entities-by-name]
+     (let [edn (clojure.edn/read-string (slurp path))]
+       (validate-pull-scope entities-by-name edn)
+       (add-include-in-push-permission edn)))
+   :cljs 
+   (defn read-pull-scoping-edn [scope-str entities-by-name]
+     (let [edn (clojure.edn/read-string scope-str)]
+       (validate-pull-scope entities-by-name edn)
+       (add-include-in-push-permission edn))))
+

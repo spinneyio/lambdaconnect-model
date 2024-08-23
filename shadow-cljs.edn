@@ -1,0 +1,8 @@
+{:lein   true
+ :builds       {:test {:target    :esm
+                       :output-dir "__tests__"
+                       :modules {:cljs_tests {:exports {test_cljs tests/test-all}}}
+                       :js-options {:js-provider :import}
+                       :compiler-options {:warnings {:redef false}} 
+                       :runtime :custom   
+                       :autorun   true}}}

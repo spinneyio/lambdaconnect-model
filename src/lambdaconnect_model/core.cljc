@@ -7,12 +7,21 @@
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.transformations :as trafo]))
 
-(defn entities-by-name
+
+#?(:clj 
+   (defn entities-by-name
   "Generates a dictionary keyed with entity names and valued in entity representations for a given core data model file. 
    These include names, attributes and relationships. See core-data-xml module for details on the data model used."
-  [model-path]
-  (-> model-path (slurp) (xml/entities-by-name)))
+     [model-path]
+     (-> model-path (slurp) (xml/entities-by-name))))
 
+#?(:cljs 
+   (defn entities-by-name
+  "Generates a dictionary keyed with entity names and valued in entity representations for a given core data model file. 
+   These include names, attributes and relationships. See core-data-xml module for details on the data model used."
+     [model-code]
+     (-> model-code (xml/entities-by-name))))
+   
 (defn datomic-schema
   "Automatically generates schema for the Core Data xml model file 
   the path was provided to."
@@ -40,10 +49,19 @@
   [n]
   (keyword "lambdaconnect-model.spec.datomic" (name n)))
 
-(defn read-pull-scoping-edn
-  "Read and validate scoping edn."
-  [path entities-by-name]
-  (scoping/read-pull-scoping-edn path entities-by-name))
+#?(:clj
+   (defn read-pull-scoping-edn
+     "Read and validate scoping edn."
+     [path entities-by-name]
+     (scoping/read-pull-scoping-edn path entities-by-name))
+   
+   :cljs
+   (defn read-pull-scoping-edn
+     "Read and validate scoping edn."
+     [text entities-by-name]
+     (scoping/read-pull-scoping-edn text entities-by-name)))
+
+
 
 (defn get-minimum-scoping-sets 
   "Given a validated scoping
@@ -83,30 +101,6 @@
   (scoping/get-scoping-queries entities-by-name scoping-defintion push?))
   ([entities-by-name scoping-defintion push? tags]
   (scoping/get-scoping-queries entities-by-name scoping-defintion push? tags)))
-
-(defn reverse-scoping-query
-  "Input:
-   Single scoping query (one value of map returned by get-scoping-queries)
-   This query efficiently answers question \"As a user, which entities can I access?\".
-   Example input:
-   [:find ?RAEmployee-ofOwner
-    :in $ [?user ...]
-    :where
-    [?user :app/uuid ?G__33024]
-    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
-    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]]
-   Output:
-   Single scoping query.
-   This query efficiently answers question \"Which users can access this entity?\".
-   Example output:
-   [:find ?user
-    :in $ [?RAEmployee-ofOwner ...]
-    :where
-    [?RAEmployee-ofOwner :RAEmployee/owner ?RAOwner-me]
-    [?RAOwner-me :RAOwner/internalUserId ?G__33024]
-    [?user :app/uuid ?G__33024]]"
-  [scoping-rule]
-  (scoping/reverse-scoping-query scoping-rule))
 
 (defn scope-selected-tags-with-tree
   "Takes:
