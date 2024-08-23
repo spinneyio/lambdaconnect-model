@@ -3,6 +3,8 @@
                        :output-dir "__tests__"
                        :modules {:cljs_tests {:exports {test_cljs tests/test-all}}}
                        :js-options {:js-provider :import}
-                       :compiler-options {:warnings {:redef false}} 
+                       :compiler-options {:warnings {:redef false}
+                    			  :optimizations :advanced
+                    			  :warnings-as-errors true} 
                        :runtime :custom   
                        :autorun   true}}}
