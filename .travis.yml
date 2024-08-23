@@ -9,7 +9,7 @@ before_install:
 jobs:
   include:
   - stage: test
-    script: ./test.sh
+    script: lein test && npm run test
 stages:
 - test
 
