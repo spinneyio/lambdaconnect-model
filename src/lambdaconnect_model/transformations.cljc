@@ -31,7 +31,7 @@
                    (let [ik (get inverses key)]
                      [(or ik key) (if (and untangle-singles
                                            ik
-                                           (not (:to-many (get (name key) (:relationships entity)))))
+                                           (not (:to-many (get (:relationships entity) (name ik)))))
                                     (first value)
                                     value)])))))
 
