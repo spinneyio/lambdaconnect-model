@@ -6,6 +6,11 @@
 
 (def pmap #?(:clj clojure.core/pmap :cljs clojure.core/map))
 
+(defmacro log-with-fn [fn & exprs]
+`(let [fn# ~fn]
+   (when fn#
+     (fn# ~@exprs))))
+
 #?(:clj 
    (defmacro defspec [k spec-form]
      `(s/def-impl ~k (quote ~spec-form) ~spec-form)))
