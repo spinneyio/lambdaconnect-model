@@ -109,8 +109,8 @@
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       (defspec (t/datomic-name rel) val)))
-  (let [all (concat (filter #(not (t/special-attribs (:name %)))
-                            (vals (:datomic-relationships entity))))
+  (let [all (concat (filter #(not (t/special-attribs (:name %))) (vals (:attributes entity)))
+                     (vals (:datomic-relationships entity)))
         required (vec (concat
                        [:app/uuid
                         :app/active
