@@ -6,7 +6,7 @@
                        [clojure.spec.alpha :as s]
                        [clojure.data.json :refer [read-str]]
                        [clojure.spec.gen.alpha :as gen]
-                       [lambdaconnect-model.utils :refer [bench]]
+                       [lambdaconnect-model.utils :refer [bench]]]
                  :cljs [[cljs.test :refer [deftest is testing]]
                         [cljs.spec.alpha :as s]
                         [cljs.spec.gen.alpha :as gen]
