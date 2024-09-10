@@ -11,4 +11,12 @@
   deref with timeout is used. See also - realized?."
   {:added "1.1"}
   [& body] `(atom ((^{:once true} fn* [] ~@body))))
+ 
+(defmacro dosync [& forms]
+  `(do ~@forms))
 
+(defmacro bench [& forms]
+`(let [s# (cljs.core/system-time)
+       result# (do ~@forms)
+       s2# (cljs.core/system-time)]
+   [result# (double (/ (- s2# s#) 1000))]))

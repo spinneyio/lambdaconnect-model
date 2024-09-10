@@ -8,18 +8,15 @@
             [lambdaconnect-model.transformations :as trafo]
             [lambdaconnect-model.utils :as u]
             [clojure.set :refer [difference]]
-            [lambdaconnect-model.core :as mp]))
+            [clojure.pprint :refer [pprint]]
+            [lambdaconnect-model.core :as mp])
+  #?(:cljs (:require-macros [lambdaconnect-model.macro :refer [dosync future]])))
 
 
 (defn- rand-nth [coll]
   ;; We do not want it to throw for empty collection. Instead let it return nil
   (when (seq coll)
     (nth coll (rand-int (count coll)))))
-
-(defn- prepare []
-  (def ebn (lambdaconnect-model.core/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))
-  (spec/specs-for-entities ebn {:LAUser/email (fn [] (gen/fmap #(str % "@test.com") (gen/string-alphanumeric)))
-                                :LAUser/gender #(s/gen #{"U" "M" "F"})}))
 
 (defn- clojure-to-json
   ;; We want to skip datomic relationships
@@ -39,6 +36,13 @@
     true)))
 
 
+
+#?(:cljs 
+   (defn ref [content]
+     (atom content)))
+
+#?(:cljs 
+   (def alter swap!))
 
 (defn generate-entity-graph 
   "Generates JSON representation of a random entity graph 
