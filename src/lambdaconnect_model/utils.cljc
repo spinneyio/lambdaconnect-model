@@ -4,6 +4,12 @@
       :cljs [cljs.spec.alpha :as s])
    [clojure.set :refer [union]]))
 
+(defmacro bench [& forms]
+`(let [s# (System/nanoTime)
+       result# (do ~@forms)
+       s2# (System/nanoTime)]
+   [result# (double (/ (- s2# s#) 1000000000))]))
+
 (def pmap #?(:clj clojure.core/pmap :cljs clojure.core/map))
 
 (defmacro log-with-fn [fn & exprs]

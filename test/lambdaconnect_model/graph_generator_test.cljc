@@ -5,21 +5,14 @@
              #?@(:clj [[clojure.test :refer [deftest is testing]]
                        [clojure.spec.alpha :as s]
                        [clojure.data.json :refer [read-str]]
-                       [clojure.spec.gen.alpha :as gen]]
+                       [clojure.spec.gen.alpha :as gen]
+                       [lambdaconnect-model.utils :refer [bench]]
                  :cljs [[cljs.test :refer [deftest is testing]]
                         [cljs.spec.alpha :as s]
                         [cljs.spec.gen.alpha :as gen]
                         [shadow.resource :as rc]
                         [clojure.test.check.generators]]))
   #?(:cljs (:require-macros [lambdaconnect-model.macro :refer [bench]])))
-
-(defn time-bench [] #?(:clj (System/nanoTime) :cljs (system-time)))
-
-(defmacro bench [& forms]
-`(let [s# (time-bench)
-       result# (do ~@forms)
-       s2# (time-bench)]
-   [result# (double (/ (- s2# s#) 1000000000))]))
 
 (deftest graph-generator 
   (let [ebn (mp/entities-by-name #?(:cljs (rc/inline "./fixtures/test-model-1.xml")
