@@ -46,4 +46,4 @@
   [entities]
   (->> entities
        vals
-       (u/mapcat schema-from-entity)))
+       (mapcat schema-from-entity)))

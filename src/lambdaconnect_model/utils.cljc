@@ -45,16 +45,6 @@
       :pred-forms []
       :opt opt})))
 
-#?(:cljs (def mapcat clojure.core/mapcat))
-
-#?(:clj 
-   (defn mapcat
-                                        ; We need our own implementation, see http://clojurian.blogspot.com/2012/11/beware-of-mapcat.html
-     ([f coll] (lambdaconnect-model.utils/mapcat f coll (lazy-seq [])))
-     ([f coll acc]
-      (if (empty? coll) acc
-          (recur f (rest coll) (lazy-seq (concat acc (f (first coll)))))))))
-
 (defn update-vals
   "m f => {k (f k v) ...}
 
