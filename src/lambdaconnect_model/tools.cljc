@@ -11,7 +11,7 @@
             [clojure.set :refer [difference intersection]]))
 
 ; Those fileds are excluded from automatic schema generation as they all have "app" prefix and are common for all the objects
-(def special-attribs #{"active" "uuid" "createdAt" "updatedAt" "syncRevision" "syncRevisionFromMaster"})
+(def special-attribs #{"active" "uuid" "createdAt" "updatedAt" "syncRevision"})
 (def special-unmodifiable-attribs (difference special-attribs #{"active"}))
 (def fake-attribs #{"syncRevision" "syncRevisionFromMaster"})
 
@@ -111,7 +111,7 @@
   "Generates a set of pairs of relationships"
   [e-by-name]
   (map #(sort-by :name (vec %))
-       (u/mapcat (fn [entity]
+       (mapcat (fn [entity]
                  (set
                   (map
                    (fn [rel]

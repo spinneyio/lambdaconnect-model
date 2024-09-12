@@ -233,7 +233,7 @@
 (defn user-info-from-xml [xml]
   (let [retval (->> xml
                     (filter #(= :userInfo (:tag %)))
-                    (u/mapcat #(->> % 
+                    (mapcat #(->> % 
                                     :content 
                                     (map :attrs)
                                     (filter identity) ;; In clojurescript parsed xml there might be nil args
@@ -284,7 +284,7 @@
                     (map (partial s/valid? ::entity) results)) 
             (reduce str (map (partial s/explain-str ::entity) results)))
     (let [pairs (t/relationship-pairs pre-datomic)
-          relevant-relationships (u/mapcat t/relevant-relationship-from-pair pairs)
+          relevant-relationships (mapcat t/relevant-relationship-from-pair pairs)
           relevant-relationships-by-entity (group-by :entity-name relevant-relationships)
           full-entities (map #(assoc % :datomic-relationships
                                      (u/map-keys first (group-by :name (get relevant-relationships-by-entity (:name %))))) results)]

@@ -48,7 +48,7 @@
                  (= op 'or-join) (let [starting-dependencies (second rule)]
                                    `(~'or-join ~(second rule) ~@(map #(dive-deeper % starting-dependencies) (rest (rest rule)))))
                  :else rule)))]
-     (let [matching-rules (u/mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches)
+     (let [matching-rules (mapcat (fn [tag] (filter (partial s-matches? tag) remaining-rules)) next-matches)
            matching-rules-set (set matching-rules)
            all-rule? (fn [rule]
                        (let [attr (second rule)]
@@ -537,7 +537,7 @@
 (defn inverse-entities
   [map-to-inverse]
   (->> map-to-inverse
-       (u/mapcat (fn [[tag ids]] 
+       (mapcat (fn [[tag ids]] 
                    (map (fn [id] (list id tag)) ids)))
        (group-by first)
        (#(u/update-vals % (fn [_ tags] (set (map second tags)))))))
@@ -735,7 +735,7 @@
 
 (defn add-include-in-push-permission [edn]
   (let [all-constraints-tags (->> edn
-                                  (u/mapcat (fn [[tag description]]
+                                  (mapcat (fn [[tag description]]
                                             (referenced-tags-from-constraint description)))
                                   (into #{}))
         referenced-unchangeable-tags (->> edn

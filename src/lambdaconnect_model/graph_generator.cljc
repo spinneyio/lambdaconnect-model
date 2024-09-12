@@ -138,8 +138,7 @@
                                                   (add-relationship max-retries))
                                          
                                          (recur (inc i)))))) 
-                     (range parallel-factor)))
-        pos-int-gen (s/gen pos-int?)]
+                     (range parallel-factor)))]
     
     (u/update-vals 
      objects
@@ -148,7 +147,7 @@
            (u/pmap (fn [r] 
                      (let [mapped (clojure-to-json @r (get entities-by-name %1))]
                        (if create-sync-revisions? 
-                         (assoc mapped "syncRevision" (first (gen/sample pos-int-gen)))
+                         (assoc mapped "syncRevision" (rand-int 1000000))
                          mapped))))
            (doall)))))
 
