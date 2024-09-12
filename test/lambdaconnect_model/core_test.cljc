@@ -47,7 +47,7 @@
     (let [model #?(:cljs (mp/entities-by-name (rc/inline "./fixtures/test-model-1.xml"))
                    :clj (mp/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))
           schema (mp/datomic-schema model)]
-      (is (= (+ 37 (count model)) (count schema)))))
+      (is (= (+ 43 (count model)) (count schema)))))
 
   (testing "Specs"
     (mp/specs #?(:cljs (mp/entities-by-name (rc/inline "./fixtures/test-model-1.xml"))
