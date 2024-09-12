@@ -111,9 +111,11 @@
                                                        (get (:inverse-entity relationship)))
                                           target (-> targets vals rand-nth)]
                                       (when (and source target)
-                                        (let [rel-flag [rel-name 
-                                                        (:app/uuid @source) 
-                                                        (:app/uuid @target)]]
+                                        (let [rel-flag (if (:to-many relationship)
+                                                         [rel-name 
+                                                          (:app/uuid @source) 
+                                                          (:app/uuid @target)]
+                                                         [rel-name (:app/uuid @source)])]
                                               (when-not (@existing-relationships rel-flag)
                                                 (alter existing-relationships conj rel-flag)
                                                 (alter source (fn [obj]
