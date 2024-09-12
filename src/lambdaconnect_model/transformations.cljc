@@ -1,5 +1,6 @@
 (ns lambdaconnect-model.transformations
   (:require [lambdaconnect-model.tools :as t]
+            [clojure.set :refer [difference]]
             [lambdaconnect-model.utils :refer [merge update-vals rebuild-map]]
             [clojure.string]))
 
@@ -36,8 +37,14 @@
                                     value)])))))
 
 (defn clojure-to-json
-  [obj entity inverse-parser-for-attribute inverse-parser-for-relationship]
-  (let [entity-fields (merge (:attributes entity) (:relationships entity))]
+  ([obj entity inverse-parser-for-attribute inverse-parser-for-relationship]
+   (clojure-to-json obj entity inverse-parser-for-attribute inverse-parser-for-relationship false))
+  ([obj entity inverse-parser-for-attribute inverse-parser-for-relationship skip-non-datomic?]
+  (let [relationships (if skip-non-datomic?                        
+                        (:datomic-relationships entity)
+                        (:relationships entity))
+        entity-fields (merge (:attributes entity) 
+                             relationships)]
     (rebuild-map 
      entity-fields
      (fn [name attr-or-rel]
@@ -57,4 +64,4 @@
          (if (and fake? (nil? pre-v))
            nil
            [(clojure.string/replace name  #"-" "_")
-            (inverse-parser val)]))))))
+            (inverse-parser val)])))))))

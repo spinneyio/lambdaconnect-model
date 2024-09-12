@@ -4,6 +4,7 @@
 	[lambdaconnect-model.utils-test] 
 	[lambdaconnect-model.scoping-test]
 	[lambdaconnect-model.scope-dependency-test]  
+        [lambdaconnect-model.graph-generator-test]
 	[cljs.analyzer.api :as ana-api]    
         [clojure.pprint :refer [pprint]]
 	[cljs.test :refer-macros [run-tests run-all-tests]

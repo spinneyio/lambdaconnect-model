@@ -4,6 +4,12 @@
       :cljs [cljs.spec.alpha :as s])
    [clojure.set :refer [union]]))
 
+(defmacro bench [& forms]
+`(let [s# (System/nanoTime)
+       result# (do ~@forms)
+       s2# (System/nanoTime)]
+   [result# (double (/ (- s2# s#) 1000000000))]))
+
 (def pmap #?(:clj clojure.core/pmap :cljs clojure.core/map))
 
 (defmacro log-with-fn [fn & exprs]
@@ -39,12 +45,15 @@
       :pred-forms []
       :opt opt})))
 
-(defn mapcat
-  ; We need our own implementation, see http://clojurian.blogspot.com/2012/11/beware-of-mapcat.html
-  ([f coll] (lambdaconnect-model.utils/mapcat f coll (lazy-seq [])))
-  ([f coll acc]
-   (if (empty? coll) acc
-       (recur f (rest coll) (lazy-seq (concat acc (f (first coll))))))))
+#?(:cljs (def mapcat clojure.core/mapcat))
+
+#?(:clj 
+   (defn mapcat
+                                        ; We need our own implementation, see http://clojurian.blogspot.com/2012/11/beware-of-mapcat.html
+     ([f coll] (lambdaconnect-model.utils/mapcat f coll (lazy-seq [])))
+     ([f coll acc]
+      (if (empty? coll) acc
+          (recur f (rest coll) (lazy-seq (concat acc (f (first coll)))))))))
 
 (defn update-vals
   "m f => {k (f k v) ...}

@@ -82,14 +82,9 @@
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       (defspec  (t/datomic-name rel) val)))
-  (let [all (concat (filter #(not (t/special-attribs (:name %))) (vals (:attributes entity)))
-                    (vals (:relationships entity)))
-        required (vec (concat
-                       [:app/uuid
-                        :app/active
-                        :app/createdAt
-                        :app/updatedAt]
-                       (map t/datomic-name (filter #(not (:optional %)) all))))
+  (let [all (concat (remove (comp t/fake-attribs :name) (vals (:attributes entity)))
+                    (vals (:relationships entity)))        
+        required (vec (map t/datomic-name (filter #(not (:optional %)) all)))
         optional (vec (map t/datomic-name (filter :optional all)))]
     (defspec (keyword "lambdaconnect-model.spec.json" (:name entity)) 
       (u/keys
@@ -109,14 +104,9 @@
   (doseq [rel (vals (:relationships entity))]
     (let [val (validator-for-relationship rel)]
       (defspec (t/datomic-name rel) val)))
-  (let [all (concat (filter #(not (t/special-attribs (:name %)))
-                            (vals (:datomic-relationships entity))))
-        required (vec (concat
-                       [:app/uuid
-                        :app/active
-                        :app/createdAt
-                        :app/updatedAt]
-                       (map t/datomic-name (filter #(not (:optional %)) all))))
+  (let [all (concat  (remove (comp t/fake-attribs :name) (vals (:attributes entity)))
+                     (vals (:datomic-relationships entity)))
+        required (vec (map t/datomic-name (filter #(not (:optional %)) all)))
         optional (vec (map t/datomic-name (filter :optional all)))]
     (defspec (keyword "lambdaconnect-model.spec.datomic" (:name entity))
       (u/keys
