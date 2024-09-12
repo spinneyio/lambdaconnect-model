@@ -186,6 +186,19 @@
    nil
    nil))
 
+(defn ->stored-sync-revision [entity-name]
+  (->Attribute
+   "syncRevisionFromMaster"
+   entity-name
+   :db.type/long
+   true
+   false
+   nil
+   nil
+   nil
+   nil
+   nil))
+
 
 (defn attribute-from-xml [entity-name xml user-info]
   (let [type (->type (:attributeType xml))]
@@ -249,6 +262,7 @@
      (-> attribute-from-xml
          (parse-elements :attribute)
          (assoc "syncRevision" (->sync-revision name))
+         (assoc "syncRevisionFromMaster" (->stored-sync-revision name))
          (dissoc "isSuitableForPush"))
      (parse-elements relationship-from-xml :relationship)
      nil ; no datomic relationships at this stage

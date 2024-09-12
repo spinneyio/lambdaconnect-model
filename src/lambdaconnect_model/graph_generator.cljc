@@ -50,10 +50,12 @@
   Assumes that specs for ebn have been generated."
   [entities-by-name & {:keys [vertices
                               edges
-                              max-retries] 
+                              max-retries
+                              create-sync-revisions?] 
                        :or {edges 1000
                             max-retries 100
-                            vertices 100}}]
+                            vertices 100
+                            create-sync-revisions? false}}]
   (let [datomic-spec-for-name (fn [n]
                                 (keyword "lambdaconnect-model.spec.datomic" n))
         
@@ -74,7 +76,9 @@
         objects (->> (range vertices) 
                      (u/pmap (fn [_] (let [entity-name (rand-nth entity-names)
                                            gen (gens entity-name)
-                                           generated (first (gen/sample gen 1))
+                                           generated (-> gen 
+                                                         (gen/sample 1)
+                                                         first)
                                            interesting-keys (set (keys generated))] 
                                        [entity-name 
                                         (ref (select-keys generated 
@@ -134,14 +138,18 @@
                                                   (add-relationship max-retries))
                                          
                                          (recur (inc i)))))) 
-                     (range parallel-factor)))]
+                     (range parallel-factor)))
+        pos-int-gen (s/gen pos-int?)]
     
     (u/update-vals 
      objects
      #(->> %2 
            vals
            (u/pmap (fn [r] 
-                  (clojure-to-json @r (get entities-by-name %1))))
+                     (let [mapped (clojure-to-json @r (get entities-by-name %1))]
+                       (if create-sync-revisions? 
+                         (assoc mapped "syncRevision" (first (gen/sample pos-int-gen)))
+                         mapped))))
            (doall)))))
 
 

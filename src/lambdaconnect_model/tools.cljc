@@ -11,9 +11,9 @@
             [clojure.set :refer [difference intersection]]))
 
 ; Those fileds are excluded from automatic schema generation as they all have "app" prefix and are common for all the objects
-(def special-attribs #{"active" "uuid" "createdAt" "updatedAt" "syncRevision"})
+(def special-attribs #{"active" "uuid" "createdAt" "updatedAt" "syncRevision" "syncRevisionFromMaster"})
 (def special-unmodifiable-attribs (difference special-attribs #{"active"}))
-(def fake-attribs #{"syncRevision"})
+(def fake-attribs #{"syncRevision" "syncRevisionFromMaster"})
 
 (def time-formatter (time-format/formatters :date-time)) ; ISO8601
 
