@@ -104,22 +104,30 @@
                                                   keys
                                                   rand-nth
                                                   (get (:datomic-relationships entity)))
+                                 
                                  result 
                                  (when relationship 
                                    (dosync
-                                    (let [rel-name (t/datomic-name relationship)
+                                    (let [inverse (-> relationship
+                                                      :inverse-entity
+                                                      (as-> en (get entities-by-name en))
+                                                      :relationships
+                                                      (get (:inverse-name relationship)))                                 
+                                          rel-name (t/datomic-name relationship)
                                           sources (-> objects
                                                        (get entity-name))
                                           source (-> sources vals rand-nth)
                                           targets (-> objects
                                                        (get (:inverse-entity relationship)))
                                           target (-> targets vals rand-nth)]
+                                      (assert inverse)
                                       (when (and source target)
-                                        (let [rel-flag (if (:to-many relationship)
-                                                         [rel-name 
-                                                          (:app/uuid @source) 
+                                        (let [rel-flag (if (and (not (:to-many relationship))
+                                                                (not (:to-many inverse)))
+                                                         [rel-name (:app/uuid @source)]
+                                                         [rel-name (:app/uuid @source) 
                                                           (:app/uuid @target)]
-                                                         [rel-name (:app/uuid @source)])]
+                                                         )]
                                               (when-not (@existing-relationships rel-flag)
                                                 (alter existing-relationships conj rel-flag)
                                                 (alter source (fn [obj]
