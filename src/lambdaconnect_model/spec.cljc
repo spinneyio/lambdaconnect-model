@@ -1,9 +1,11 @@
 (ns lambdaconnect-model.spec
     #?(:cljs (:require-macros [lambdaconnect-model.macro :refer [defspec]]))
-  (:require #?(:clj [clojure.spec.alpha :as s] 
-               :cljs [cljs.spec.alpha :as s])
+  (:require #?@(:clj [[clojure.spec.alpha :as s] 
+                      [clojure.spec.gen.alpha :as gen]
+                      [lambdaconnect-model.utils :refer [defspec]]]
+               :cljs [[cljs.spec.alpha :as s]
+                      [cljs.spec.gen.alpha :as gen]])
             [clojure.walk :as walk]
-            #?(:clj [lambdaconnect-model.utils :refer [defspec]])
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.utils :as u]
             [lambdaconnect-model.data-xml :as xml]))
@@ -123,3 +125,28 @@
    (->> entities-by-name
         (vals)
         (map (partial datomic-spec-for-entity generators)))))
+
+(defn gensub
+  "Sometimes the 'could not satisfy after 100 tries' message when generating spec makes us angry.
+  It is because it does not return the field there are problems with. If you do (with-redefs [clojure.spec.alpha/gensub gensub] ...)
+  you will receive additional info."
+  [spec overrides path rmap form]
+  
+;;  (prn {:spec spec :over overrides :path path :form form})
+  ;;(when (keyword? spec) (eval `(clojure.repl/doc ~spec)))
+  (let [spec (#'s/specize spec)]
+    (if-let [g (or (when-let [gfn (or (get overrides (or (#'s/spec-name spec) spec))
+                                          (get overrides path))]
+                       (gfn))
+                     (#'s/gen* spec overrides path rmap))]
+      (gen/such-that #(s/valid? spec %) g {:max-tries 100
+                                           :ex-fn (fn [{:keys [max-tries]}]
+                                                    (ex-info (str "Couldn't satisfy " (#'s/spec-name spec) "  after " max-tries " tries.")
+                                                             {:max  max-tries
+                                                              :path path
+                                                              :sample-explain (->> (first (gen/sample g 1))
+                                                                                   (#'s/explain-data spec)
+                                                                                 :clojure.spec.alpha/problems)}))})
+      (let [abbr (#'s/abbrev form)]
+        (throw (ex-info (str "Unable to construct gen at: " path " for: " abbr)
+                        {::path path ::form form ::failure :no-gen}))))))
