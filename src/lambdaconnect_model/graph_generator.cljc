@@ -94,6 +94,7 @@
                                                  #(vector (:app/uuid @%) %) 
                                                  (map second samples))))))))
         existing-relationships (ref #{})
+        existing-to-one-targets (ref #{})
         
         
         add-relationship (fn [retry-count] 
@@ -122,14 +123,16 @@
                                           target (-> targets vals rand-nth)]
                                       (assert inverse)
                                       (when (and source target)
-                                        (let [rel-flag (if (and (not (:to-many relationship))
-                                                                (not (:to-many inverse)))
-                                                         [rel-name (:app/uuid @source)]
-                                                         [rel-name (:app/uuid @source) 
-                                                          (:app/uuid @target)]
-                                                         )]
-                                              (when-not (@existing-relationships rel-flag)
+                                        (let [rel-flag [rel-name (:app/uuid @source) 
+                                                        (:app/uuid @target)]
+                                              target-flag (when (and (not (:to-many relationship))
+                                                                     (not (:to-many inverse)))
+                                                            [rel-name (:app/uuid @target)])]
+                                          (when-not (or (@existing-relationships rel-flag)
+                                                        (and target-flag (@existing-to-one-targets target-flag)))
                                                 (alter existing-relationships conj rel-flag)
+                                                (when target-flag
+                                                  (alter existing-to-one-targets conj target-flag))
                                                 (alter source (fn [obj]
                                                                 (if (:to-many relationship)
                                                                   (update obj rel-name #(conj (or % []) {:app/uuid (:app/uuid @target)}))
