@@ -42,8 +42,8 @@
       :req req
       :req-keys req 
       :opt-specs opt
-      :pred-forms `[(clojure.core/fn [%] (clojure.core/map? %))
-                    ~@(map (fn [rq]  `(clojure.core/fn [%] (clojure.core/contains? % ~rq))) req)]
+      :pred-forms `[(clojure.core/fn [~'%] (clojure.core/map? ~'%))
+                    ~@(map (fn [rq]  `(clojure.core/fn [~'%] (clojure.core/contains? ~'% ~rq))) req)]
       :opt opt})))
 
 (defn update-vals
