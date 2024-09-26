@@ -160,16 +160,16 @@
   (assert (not (s/valid? spec object)) "Logic error")
   (let [problems (->> object 
                       (s/explain-data spec)
-                      :clojure.spec.alpha/problems
+                      #?(:clj :clojure.spec.alpha/problems :cljs :cljs.spec.alpha/problems)
                       (sort-by #(- (count (:in %))))
                       (sort-by #(- (count (:path %)))))
         extra {:object (pr-str object)
                :problems (map (fn [{:keys [val pred reason via in path] :as problem}]
                                 (cond-> {:value (pr-str val)
                                          :validator (or reason (pr-str (s/abbrev pred)))}
-                                  (not (empty? in)) (merge {:in in})
-                                  (not (empty? path)) (merge {:at path})
-                                  (not (empty? via)) (merge {:failing-spec-name (last via)
+                                  (not (empty? in)) (merge {:in (map str in)})
+                                  (not (empty? path)) (merge {:at (map str path)})
+                                  (not (empty? via)) (merge {:failing-spec-name (str (last via))
                                                              :failing-spec-description (pr-str (s/describe (last via)))})
                                   true (#(merge % (select-keys 
                                                    problem (difference 
