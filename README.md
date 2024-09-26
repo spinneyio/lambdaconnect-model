@@ -7,7 +7,7 @@ A Clojure library designed to parse CoreData model and transform it into Datomic
 
 Leiningen coordinates:
 ```clojure
-[io.spinney/lambdaconnect-model "1.0.27"]
+[io.spinney/lambdaconnect-model "1.0.28"]
 ```
 
 ## Usage
