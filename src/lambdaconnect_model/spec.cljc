@@ -62,15 +62,17 @@
 
 (defn validator-for-relationship
   [rel]
-  (let [min (if (:min-value rel) [:min-count (:min-value rel)] [])
-        max (if (:max-value rel) [:max-count (:max-value rel)] [])
-        ref (concat [:app/relationship] min max)]
-    (if (:to-many rel)
-      (case (count ref)
-        1 (s/coll-of (first ref))
-        3 (s/coll-of (first ref) (nth ref 1) (nth ref 2))
-        5 (s/coll-of (first ref) (nth ref 1) (nth ref 2) (nth ref 3) (nth ref 4)))
-      (s/nilable :app/relationship))))
+  (if (:to-many rel)
+    (cond
+      (and (:min-value rel) (:max-value rel)) 
+      (s/coll-of :app/relationship :min-count (:min-value rel) :max-count (:max-value rel))
+      (:min-value rel)
+      (s/coll-of :app/relationship :min-count (:min-value rel))
+      (:max-value rel)
+      (s/coll-of :app/relationship :max-count (:max-value rel))
+      :default (s/coll-of :app/relationship))
+    (if (:optional rel) (s/nilable :app/relationship)
+        :app/relationship)))
 
 (defn spec-for-entity
   [generators entity]
