@@ -8,6 +8,9 @@
             [clojure.walk :as walk]
             [lambdaconnect-model.tools :as t]
             [lambdaconnect-model.utils :as u]
+            [clojure.repl :refer [doc]]
+            [clojure.pprint :refer [pprint]]
+            [clojure.set :refer [difference]]
             [lambdaconnect-model.data-xml :as xml]))
 
 (s/def :app/uuid uuid?)
@@ -152,3 +155,25 @@
       (let [abbr (#'s/abbrev form)]
         (throw (ex-info (str "Unable to construct gen at: " path " for: " abbr)
                         {::path path ::form form ::failure :no-gen}))))))
+
+(defn exception-from-failed-spec [spec object]
+  (assert (not (s/valid? spec object)) "Logic error")
+  (let [problems (->> object 
+                      (s/explain-data spec)
+                      :clojure.spec.alpha/problems
+                      (sort-by #(- (count (:in %))))
+                      (sort-by #(- (count (:path %)))))
+        extra {:object (pr-str object)
+               :problems (map (fn [{:keys [val pred reason via in path] :as problem}]
+                                (cond-> {:value (pr-str val)
+                                         :validator (or reason (pr-str (s/abbrev pred)))}
+                                  (not (empty? in)) (merge {:in in})
+                                  (not (empty? path)) (merge {:at path})
+                                  (not (empty? via)) (merge {:failing-spec-name (last via)
+                                                             :failing-spec-description (pr-str (s/describe (last via)))})
+                                  true (#(merge % (select-keys 
+                                                   problem (difference 
+                                                            (set (keys problem)) 
+                                                            #{:val :pred :reason :via :in :path})))))) 
+                              problems)}]
+    (ex-info (str "Spec failed: " (s/explain-str spec object)) extra)))
