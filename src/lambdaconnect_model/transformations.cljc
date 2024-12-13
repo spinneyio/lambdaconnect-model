@@ -25,7 +25,7 @@
                           (= (:entity-hash cached) (hash entity)))
                    cached
                    (let [built (build-parser-cache entity parser-for-attribute parser-for-relationship)]
-                     (swap! parser-cache #(assoc % (:name entity) built))
+                     (swap! parser-cache assoc (:name entity) built)
                      built))]
      (rebuild-map json 
                   (fn [key val]
@@ -50,7 +50,7 @@
 (defn memoized-inverses [entity]
   (let [compute (fn [] 
                   (let [computed (inverses-fun entity)]
-                    (swap! inverses-cache #(assoc % (:name entity) computed))
+                    (swap! inverses-cache assoc  (:name entity) computed)
                     computed))]
     (if-let [cached (get @inverses-cache (:name entity))]
       (if (= (hash entity) (:entity-hash cached))
