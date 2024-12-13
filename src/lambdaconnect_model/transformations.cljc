@@ -4,29 +4,63 @@
             [lambdaconnect-model.utils :refer [merge update-vals rebuild-map]]
             [clojure.string]))
 
+
+(defn build-parser-cache [entity parser-for-attribute parser-for-relationship]
+  (into {} (concat 
+            (map (fn [[k a]] [k [(t/datomic-name a) (parser-for-attribute a) (:optional a)]]) (:attributes entity))
+            (map (fn [[k r]] [k [(t/datomic-name r) (parser-for-relationship r) (:optional r)]]) (:relationships entity))
+            [[:entity-hash (hash entity)]
+             [:attribute-parser-hash (hash parser-for-attribute)]
+             [:relationship-parser-hash (hash parser-for-relationship)]])))
+
+(def parser-cache (atom {}))
+
 (defn json-to-clojure
   "Converts json-based map into the one that conforms to the spec. "
-  [json entity parser-for-attribute parser-for-relationship]
-  (rebuild-map json 
-               (fn [k val]
-                 (let [key (clojure.string/replace k #"_" "-")
-                       attr (get (:attributes entity) key)
-                       rel  (get (:relationships entity) key)]
-                   (assert (or rel attr) (str "The json does not match the entity '" (:name entity) "'. The attribute attribute: " key " with value: '" val "' does not exist in the model."))
-                   [(t/datomic-name (or attr rel))
-                    (if (and (nil? val) (:optional attr)) nil
-                        ((if attr (parser-for-attribute attr) (parser-for-relationship rel)) val))]))))
+  ([json entity parser-for-attribute parser-for-relationship]
+   (let [cached (get @parser-cache (:name entity))
+         parsers (if (and cached 
+                          (= (:attribute-parser-hash cached) (hash parser-for-attribute))
+                          (= (:relationship-parser-hash cached) (hash parser-for-relationship))
+                          (= (:entity-hash cached) (hash entity)))
+                   cached
+                   (let [built (build-parser-cache entity parser-for-attribute parser-for-relationship)]
+                     (swap! parser-cache assoc (:name entity) built)
+                     built))]
+     (rebuild-map json 
+                  (fn [key val]
+                    (let [[datomic-name parser optional?] (get parsers key)]
+                      (assert parser (str "The json does not match the entity '" (:name entity) "'. The attribute attribute: " key " with value: '" val "' does not exist in the model."))
+                      [datomic-name
+                       (if (and (nil? val) optional?) 
+                         nil
+                         (parser val))]))))))
 
-(defn- inverses-fun [names entity]
-  (into {} (map (fn [n] (let [inverse (t/relationship-for-inverse-name entity n)]
-                          [n (when inverse (t/datomic-name inverse))])) names)))
+(defn- inverses-fun [entity]
+  (let [non-datomic-rels (difference (set (vals (:relationships entity)))
+                                     (set (vals (:datomic-relationships entity))))]
+    (assoc 
+    (->> non-datomic-rels
+         (map (juxt t/datomic-inverse-name t/datomic-name))
+         (into {}))
+    :entity-hash (hash entity))))
+        
+(def inverses-cache (atom {}))
 
-(def memoized-inverses (memoize inverses-fun))
+(defn memoized-inverses [entity]
+  (let [compute (fn [] 
+                  (let [computed (inverses-fun entity)]
+                    (swap! inverses-cache assoc  (:name entity) computed)
+                    computed))]
+    (if-let [cached (get @inverses-cache (:name entity))]
+      (if (= (hash entity) (:entity-hash cached))
+        cached
+        (compute))
+      (compute))))
 
 (defn replace-inverses
   [obj entity untangle-singles]
-  (let [names (keys obj)
-        inverses (memoized-inverses names entity)]
+  (let [inverses (memoized-inverses entity)]
     (rebuild-map obj 
                  (fn [key value]
                    (let [ik (get inverses key)]
@@ -63,5 +97,5 @@
                               (inverse-parser-for-attribute attr-or-rel))]
          (if (and fake? (nil? pre-v))
            nil
-           [(clojure.string/replace name  #"-" "_")
+           [name
             (inverse-parser val)])))))))
