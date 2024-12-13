@@ -51,11 +51,13 @@
   [entities-by-name & {:keys [vertices
                               edges
                               max-retries
-                              create-sync-revisions?] 
+                              create-sync-revisions?
+                              force-active?] 
                        :or {edges 1000
                             max-retries 100
                             vertices 100
-                            create-sync-revisions? false}}]
+                            create-sync-revisions? false
+                            force-active? false}}]
   (let [datomic-spec-for-name (fn [n]
                                 (keyword "lambdaconnect-model.spec.datomic" n))
         
@@ -79,6 +81,7 @@
                                            generated (-> gen 
                                                          (gen/sample 1)
                                                          first)
+                                           generated (if force-active? (assoc generated :app/active true) generated)
                                            interesting-keys (set (keys generated))] 
                                        [entity-name 
                                         (ref (select-keys generated 
