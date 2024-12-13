@@ -41,7 +41,7 @@
                                      (set (vals (:datomic-relationships entity))))]
     (assoc 
     (->> non-datomic-rels
-         (map #(-> [(t/datomic-inverse-name %) (t/datomic-name %)]))
+         (map (juxt t/datomic-inverse-name t/datomic-name))
          (into {}))
     :entity-hash (hash entity))))
         
