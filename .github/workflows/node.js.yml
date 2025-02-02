@@ -35,7 +35,10 @@ jobs:
         # List all files containing dependencies:
         key: cljdeps-${{ hashFiles('project.clj') }}
         restore-keys: cljdeps-
-    - uses: oxr463/setup-leiningen@0.0.1
+    - name: Install Leiningen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y leiningen
 
     - run: npm ci
     - run: npm run build --if-present
