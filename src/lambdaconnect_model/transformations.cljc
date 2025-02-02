@@ -19,7 +19,7 @@
   "Converts json-based map into the one that conforms to the spec. "
   ([json entity parser-for-attribute parser-for-relationship]
    (let [cached (get @parser-cache (:name entity))
-         parsers (if (and cached 
+         parsers (if (and cached
                           (= (:attribute-parser-hash cached) (hash parser-for-attribute))
                           (= (:relationship-parser-hash cached) (hash parser-for-relationship))
                           (= (:entity-hash cached) (hash entity)))
@@ -27,14 +27,15 @@
                    (let [built (build-parser-cache entity parser-for-attribute parser-for-relationship)]
                      (swap! parser-cache assoc (:name entity) built)
                      built))]
-     (rebuild-map json 
+     (rebuild-map json
                   (fn [key val]
                     (let [[datomic-name parser optional?] (get parsers key)]
-                      (assert parser (str "The json does not match the entity '" (:name entity) "'. The attribute attribute: " key " with value: '" val "' does not exist in the model."))
-                      [datomic-name
-                       (if (and (nil? val) optional?) 
-                         nil
-                         (parser val))]))))))
+                      (when parser
+                        ;;(assert parser (str "The json does not match the entity '" (:name entity) "'. The attribute attribute: " key " with value: '" val "' does not exist in the model."))
+                        [datomic-name
+                         (if (and (nil? val) optional?)
+                           nil
+                           (parser val))])))))))
 
 (defn- inverses-fun [entity]
   (let [non-datomic-rels (difference (set (vals (:relationships entity)))

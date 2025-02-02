@@ -20,17 +20,20 @@
       (is (= (count model) 4))
       (testing ";Json to model converter"
         (mp/specs model {:LAUser/gender #(s/gen #{"M" "F" "U"})
-                         :LAUser/email (fn [] (gen/fmap #(str % "@test.com") (gen/string-alphanumeric)))
-                         })
+                         :LAUser/email (fn [] (gen/fmap #(str % "@test.com") (gen/string-alphanumeric)))})
         (let [game-model (get model "LAGame")
               json #?(:clj (->> "test/lambdaconnect_model/fixtures/fixtures.json"
                                 slurp
-                                read-str) 
-                      :cljs (->> "./fixtures/fixtures.json" 
+                                read-str)
+                      :cljs (->> "./fixtures/fixtures.json"
                                  rc/inline
                                  (.parse js/JSON)
                                  (js->clj)))
-              ent (-> json (get "LAGame") first (mp/json-to-clojure game-model))
+              ent (-> json
+                      (get "LAGame")
+                      (first) 
+                      (assoc "aaa" 7) ;; we create an extra param - it should now be ignored
+                      (mp/json-to-clojure game-model))
               generated-games (gen/sample (s/gen (mp/spec-for-name :LAGame)) 200)]
 
           (is (s/valid? (mp/spec-for-name :LAGame) ent) (s/explain-str (mp/spec-for-name :LAGame) ent))
@@ -42,7 +45,6 @@
                                        (mp/json-to-clojure game-model))]
                 (is (mpt/compare-objects generated-game processed-game game-model)))))))))
 
-
   (testing "Schema from model"
     (let [model #?(:cljs (mp/entities-by-name (rc/inline "./fixtures/test-model-1.xml"))
                    :clj (mp/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))
@@ -51,8 +53,8 @@
 
   (testing "Specs"
     (mp/specs #?(:cljs (mp/entities-by-name (rc/inline "./fixtures/test-model-1.xml"))
-                   :clj (mp/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))))
-  
+                 :clj (mp/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))))
+
   (testing "User info"
     (let [model #?(:cljs (mp/entities-by-name (rc/inline "./fixtures/test-model-1.xml"))
                    :clj (mp/entities-by-name "test/lambdaconnect_model/fixtures/test-model-1.xml"))]
